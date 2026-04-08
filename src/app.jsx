@@ -364,14 +364,14 @@ const App = () => {
   return (
     <div
       className="flex flex-col h-screen font-sans overflow-hidden"
-      style={{ background: C.background, color: C.textDark }}
+      style={{ background: C.background, color: C.textDark, height: "100dvh" }}
     >
       {/* ── HEADER ── */}
       <header
-        className="z-50 shadow-md relative"
+        className="z-50 shadow-md sticky top-0"
         style={{ background: C.green }}
       >
-        <div className="max-w-[1920px] mx-auto px-4 md:px-6 py-3 flex items-center justify-between md:justify-center gap-4 relative min-h-12">
+        <div className="px-3 md:px-6 py-3 flex items-center justify-between md:justify-center gap-3 relative min-h-12">
           {/* Logo + Title */}
           <div className="flex items-center shrink-0 md:absolute md:left-6 gap-2 md:gap-3">
             <img
@@ -1270,19 +1270,24 @@ const App = () => {
 
         {/* ── FILTER SHEET (mobile) ── */}
         <div
-          className="absolute left-0 right-0 z-20 rounded-t-3xl shadow-[0_-10px_40px_-8px_rgba(0,0,0,0.25)] transition-all duration-500 ease-out md:hidden"
+          className="fixed left-0 right-0 z-20 rounded-t-3xl shadow-[0_-10px_40px_-8px_rgba(0,0,0,0.25)] transition-all duration-500 ease-out md:hidden"
           style={{
             bottom: 0,
+            top: "auto",
+            maxHeight: "85vh",
             transform: showFilterSheet ? "translateY(0)" : "translateY(100%)",
             background: C.white,
           }}
         >
           <div
-            className="w-14 h-1.5 rounded-full mx-auto mt-4 mb-1"
+            className="w-14 h-1.5 rounded-full mx-auto mt-3 mb-1"
             style={{ background: C.border }}
           />
-          <div className="px-6 pb-8 pt-3">
-            <div className="flex items-center justify-between mb-5">
+          <div
+            className="px-5 pb-8 pt-2 overflow-y-auto"
+            style={{ maxHeight: "calc(85vh - 40px)" }}
+          >
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold" style={{ color: C.textDark }}>
                 Filtros
               </h3>
@@ -1398,14 +1403,14 @@ const App = () => {
           </div>
         </div>
 
-        {/* Floating filter button (mobile only) */}
-        {!showBottomSheet && !showFilterSheet && (
+        {/* Floating filter button (mobile only) - Fixed position */}
+        {!showFilterSheet && (
           <button
-            className="absolute right-5 bottom-6 z-20 md:hidden flex items-center gap-2 px-5 py-3.5 rounded-2xl font-bold text-sm shadow-xl"
+            className="fixed right-4 bottom-6 z-20 md:hidden flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all"
             style={{ background: C.green, color: C.white }}
             onClick={() => setShowFilterSheet(true)}
           >
-            <Search size={18} /> FILTROS
+            <Search size={16} /> FILTROS
           </button>
         )}
 
