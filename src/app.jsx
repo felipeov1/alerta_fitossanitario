@@ -653,70 +653,82 @@ const App = () => {
               ];
 
               // VERSÃO COMPACT (original)
-              if (filterLayout === "compact") {
-                return (
-                  <div className="hidden md:flex items-center justify-center flex-1 min-w-0 py-3">
-                    <div className="flex items-center gap-3 w-full max-w-2xl min-w-0">
-                      {/* Grid 2×2 responsivo */}
-                      <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1.5 min-w-0">
-                        {filters.map((f, i) => (
-                          <div key={i} className="relative min-w-0">
-                            <f.icon
-                              size={13}
-                              className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                              style={{
-                                color: f.locked ? "#c4c4c4" : C.greenMid,
-                              }}
-                            />
-                            <select
-                              disabled={f.locked}
-                              className="w-full min-w-0 pl-8 pr-6 py-1.5 appearance-none rounded-lg text-xs font-semibold outline-none transition-all truncate"
-                              style={{
-                                background: f.locked
-                                  ? "rgba(255,255,255,0.15)"
-                                  : C.white,
-                                border: `1px solid ${f.locked ? "rgba(255,255,255,0.2)" : C.border}`,
-                                color: f.val ? C.textDark : "#9ca3af",
-                                cursor: f.locked ? "not-allowed" : "pointer",
-                                opacity: f.locked ? 0.55 : 1,
-                              }}
-                              value={f.val}
-                              onChange={(e) => f.set(e.target.value)}
-                            >
-                              <option value="">{f.placeholder}</option>
-                              {f.opts.map((opt) => (
-                                <option key={opt} value={opt}>
-                                  {opt}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown
-                              size={11}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-                              style={{
-                                color: f.locked ? "#c4c4c4" : C.greenMid,
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      {/* Botão de alternância */}
-                      <button
-                        title="Alternar layout de filtros"
-                        onClick={() => setFilterLayout("sidebar")}
-                        className="shrink-0 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-all"
-                        style={{
-                          background: "rgba(255,255,255,0.2)",
-                          color: C.white,
-                          border: `1px solid rgba(255,255,255,0.3)`,
-                        }}
-                      >
-                        ≡
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
+              // VERSÃO COMPACT (original no header)
+if (filterLayout === "compact") {
+  return (
+    <div className="hidden md:flex items-center justify-center flex-1 min-w-0 py-3">
+      <div className="flex items-center gap-3 w-full max-w-2xl min-w-0">
+        <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1.5 min-w-0">
+          {filters.map((f, i) => (
+            <div key={i} className="relative min-w-0">
+              <f.icon
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{
+                  color: f.locked ? "#c4c4c4" : C.greenMid,
+                }}
+              />
+              <select
+                disabled={f.locked}
+                className="w-full min-w-0 pl-8 pr-6 py-1.5 appearance-none rounded-lg text-xs font-semibold outline-none transition-all truncate"
+                style={{
+                  background: f.locked ? "rgba(255,255,255,0.15)" : C.white,
+                  border: `1px solid ${f.locked ? "rgba(255,255,255,0.2)" : C.border}`,
+                  color: f.val ? C.textDark : "#9ca3af",
+                  cursor: f.locked ? "not-allowed" : "pointer",
+                  opacity: f.locked ? 0.55 : 1,
+                }}
+                value={f.val}
+                onChange={(e) => f.set(e.target.value)}
+              >
+                <option value="">{f.placeholder}</option>
+                {f.opts.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={11}
+                className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{
+                  color: f.locked ? "#c4c4c4" : C.greenMid,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            className="px-4 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+            style={{
+              background: selectedCrop ? C.white : "rgba(255,255,255,0.5)",
+              color: selectedCrop ? C.green : "rgba(30,107,69,0.5)",
+              cursor: selectedCrop ? "pointer" : "not-allowed",
+            }}
+            disabled={!selectedCrop}
+            onClick={() => setFiltersApplied(true)}
+          >
+            <Search size={14} /> Filtrar
+          </button>
+          
+          <button
+            onClick={() => setFilterLayout("sidebar")}
+            className="shrink-0 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-all"
+            style={{
+              background: "rgba(255,255,255,0.2)",
+              color: C.white,
+              border: `1px solid rgba(255,255,255,0.3)`,
+            }}
+          >
+            ≡
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
             })()}
 
           {/* Spacer quando sem filtros */}
@@ -864,6 +876,25 @@ const App = () => {
                     </div>
                   ))}
                 </div>
+
+                {/* NOVO BOTÃO DE APLICAR FILTROS NO DESKTOP */}
+      <div className="mt-6">
+        <button
+          className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
+          style={{
+            background: selectedCrop ? C.green : "#9ca3af",
+            color: C.white,
+            cursor: selectedCrop ? "pointer" : "not-allowed",
+          }}
+          disabled={!selectedCrop}
+          onClick={() => {
+            setFiltersApplied(true);
+            setFilterLayout("compact"); // Opcional: Volta pro modo compacto após buscar
+          }}
+        >
+          <Search size={16} /> APLICAR FILTROS
+        </button>
+      </div>
 
                 {/* Status */}
                 <div
