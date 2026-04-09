@@ -12,7 +12,6 @@ import {
   X,
   Wind,
   CloudRain,
-  AlertTriangle,
   LocateFixed,
   Plus,
   Minus,
@@ -33,6 +32,90 @@ const C = {
   white: "#FFFFFF",
 };
 
+// Cálculos de risco baseado na lógica de Fitopatologia
+const calculateDiseaseRisk = (station) => {
+  if (!station) {
+    return { sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" };
+  }
+
+  // Mapeia os nomes corretos das propriedades
+  const ur = station.hum;
+  const chuva = station.rain;
+  const tmed = station.temp;
+
+  // Validações
+  if (ur === undefined || chuva === undefined || tmed === undefined) {
+    return { sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" };
+  }
+
+  // Extrai números das strings (ex: "92%" -> 92, "38 mm" -> 38, "16.2°C" -> 16.2)
+  const urValue =
+    typeof ur === "string" ? parseFloat(ur.match(/\d+\.?\d*/)?.[0] || 0) : ur;
+  const chuvaValue =
+    typeof chuva === "string"
+      ? parseFloat(chuva.match(/\d+\.?\d*/)?.[0] || 0)
+      : chuva;
+  const tmedValue =
+    typeof tmed === "string"
+      ? parseFloat(tmed.match(/\d+(?:\.\d+)?/)?.[0] || 0)
+      : tmed;
+
+  console.log("Station calc:", {
+    ur,
+    chuva,
+    tmed,
+    urValue,
+    chuvaValue,
+    tmedValue,
+  });
+
+  // PMF (Período de Molhamento Foliar): 1 se UR > 90%, senão 0
+  const pmf = urValue > 90 ? 1 : 0;
+
+  // PMF com Chuva: 1 se teve molhamento E chuva
+  const pmfChuva = pmf === 1 && chuvaValue > 0 ? 1 : 0;
+
+  // PMF em Horas (simulado com base em chuva e umidade)
+  // Se houve chuva com UR alta, acumula horas (cada mm de chuva = ~1h de molhamento)
+  const pmfHs = pmfChuva > 0 ? chuvaValue : 0;
+
+  // Temperatura média acumulada durante molhamento
+  const tmedAc = pmfChuva > 0 ? tmedValue : 0;
+
+  console.log("Calculations:", {
+    pmf,
+    pmfChuva,
+    pmfHs,
+    tmedAc,
+    product: pmfHs * tmedAc,
+  });
+
+  // SARNA: Precisa pmfChuva E horas E temperatura
+  let sarnaRisk = "Não Favorável";
+  if (pmfChuva < 1) {
+    sarnaRisk = "Não Favorável";
+  } else if (pmfHs < 9) {
+    sarnaRisk = "Pouco Favorável";
+  } else if (pmfHs < 900) {
+    // Verifica se (pmfHs × tmedAc) >= 140
+    if (pmfHs * tmedAc >= 140) {
+      sarnaRisk = "Favorável à Doença";
+    } else {
+      sarnaRisk = "Pouco Favorável";
+    }
+  }
+
+  console.log("Disease Risk:", { sarnaRisk });
+
+  // MANCHA DE GALA: Precisa de pmfHs >= 10 E tmedAc > 14.9
+  let galaRisk = "Não Favorável";
+  if (pmfHs >= 10 && tmedAc > 14.9) {
+    galaRisk = "Favorável à Doença";
+  }
+
+  return { sarnaRisk, galaRisk };
+};
+
 const App = () => {
   const [selectedCrop, setSelectedCrop] = useState("");
   const [selectedPhase, setSelectedPhase] = useState("");
@@ -43,6 +126,7 @@ const App = () => {
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
   const [filtersApplied, setFiltersApplied] = useState(false);
+  const [filterLayout, setFilterLayout] = useState("compact"); // "compact" ou "sidebar"
 
   useEffect(() => {
     const check = () => {
@@ -62,12 +146,39 @@ const App = () => {
   const markersRef = useRef({});
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
+  // Calcula os riscos de doenças com base nos dados da estação
+  const getCalculatedRisks = (station) => {
+    const risks = calculateDiseaseRisk(station);
+    return risks;
+  };
+
+  // Calcula o risco máximo da estação (o mais grave entre as doenças)
+  const getMaxRisk = (station) => {
+    if (!station) return "Não Favorável";
+
+    const risks = calculateDiseaseRisk(station);
+    const riskOrder = {
+      "Favorável à Doença": 3,
+      "Pouco Favorável": 2,
+      "Não Favorável": 1,
+    };
+    const maxRisk = Math.max(
+      riskOrder[risks.sarnaRisk] || 0,
+      riskOrder[risks.galaRisk] || 0,
+    );
+    // Retorna o risco correspondente ao valor máximo
+    if (maxRisk === 3) return "Favorável à Doença";
+    if (maxRisk === 2) return "Pouco Favorável";
+    return "Não Favorável";
+  };
+
   const markers = [
     {
       id: 1,
       lat: -25.47,
       lng: -49.72,
       name: "Estação Lapa",
+      city: "Lapa",
       status: "Crítico",
       diseaseRisk: "Favorável à Doença",
       fase: "Frutificação, frutos com 20 a 30 mm",
@@ -77,40 +188,60 @@ const App = () => {
           name: "Sarna da Maçã",
           sci: "Venturia inaequalis",
           risk: "Favorável à Doença",
-          action: "Aplicar fungicida imediatamente",
+          description:
+            "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas, reduzindo a qualidade comercial e afetando a produtividade.",
+          conditions:
+            "Requer períodos prolongados de folha molhada com chuva, umidade relativa acima de 90% e temperaturas moderadas.",
+          alertCause: [
+            {
+              label: "Folha molhada com chuva",
+              value: "38 h",
+              threshold: "Alerta: 9 horas",
+              critical: true,
+            },
+            {
+              label: "Umidade relativa",
+              value: "92%",
+              threshold: "Alerta: acima de 90%",
+              critical: true,
+            },
+            {
+              label: "Chuva acumulada",
+              value: "38 mm",
+              threshold: "Qualquer chuva ativa o risco",
+              critical: true,
+            },
+          ],
         },
         {
           name: "Mancha de Gala",
           sci: "Colletotrichum spp.",
           risk: "Favorável à Doença",
           action: "Atenção para a cultivar Gala, risco de desfolha",
-        },
-      ],
-      alertCause: [
-        {
-          label: "Horas de folha molhada com chuva",
-          value: "14 h",
-          threshold:
-            "Sarna a partir de 9 horas\nMancha de Gala a partir de 10 horas",
-          critical: true,
-        },
-        {
-          label: "Temperatura média no período úmido",
-          value: "16.2°C",
-          threshold: "Acima de 14.9°C favorece a Mancha de Gala",
-          critical: true,
-        },
-        {
-          label: "Umidade relativa do ar",
-          value: "92%",
-          threshold: "Acima de 90% a folha é considerada molhada",
-          critical: true,
-        },
-        {
-          label: "Chuva acumulada enquanto folha molhada",
-          value: "38 mm",
-          threshold: "Qualquer chuva durante molhamento ativa o risco",
-          critical: true,
+          description:
+            "Doença fúngica que causa lesões necróticas nas folhas, levando ao ressecamento prematuro e desfolha significativa, comprometendo a produção.",
+          conditions:
+            "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C e alta umidade relativa.",
+          alertCause: [
+            {
+              label: "Folha molhada com chuva",
+              value: "38 h",
+              threshold: "Alerta: 10 horas",
+              critical: true,
+            },
+            {
+              label: "Temperatura no período úmido",
+              value: "16.2°C",
+              threshold: "Alerta: acima de 14.9°C",
+              critical: true,
+            },
+            {
+              label: "Umidade relativa",
+              value: "92%",
+              threshold: "Alerta: acima de 90%",
+              critical: true,
+            },
+          ],
         },
       ],
       codependency: [
@@ -121,10 +252,9 @@ const App = () => {
       station: {
         temp: "16.2°C",
         hum: "92%",
-        wetness: "14 h",
+        wetness: "38 h",
         rain: "38 mm",
         wind: "7 km/h",
-        dewPoint: "13°C",
       },
     },
     {
@@ -132,6 +262,7 @@ const App = () => {
       lat: -26.47,
       lng: -51.99,
       name: "Estação Palmas",
+      city: "Palmas",
       status: "Atenção",
       diseaseRisk: "Pouco Favorável",
       fase: "Floração plena",
@@ -141,44 +272,64 @@ const App = () => {
           name: "Sarna da Maçã",
           sci: "Venturia inaequalis",
           risk: "Pouco Favorável",
-          action: "Monitorar: ainda 1 hora abaixo do nível de alerta",
+          action: "",
+          description:
+            "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas, reduzindo a qualidade comercial e afetando a produtividade.",
+          conditions:
+            "Requer períodos prolongados de folha molhada com chuva, umidade relativa acima de 90% e temperaturas moderadas.",
+          alertCause: [
+            {
+              label: "Folha molhada com chuva",
+              value: "8 h",
+              threshold: "Alerta: 9 horas",
+              critical: false,
+            },
+            {
+              label: "Umidade relativa",
+              value: "91%",
+              threshold: "Alerta: acima de 90%",
+              critical: true,
+            },
+            {
+              label: "Chuva acumulada",
+              value: "21 mm",
+              threshold: "Qualquer chuva ativa o risco",
+              critical: false,
+            },
+          ],
         },
         {
           name: "Mancha de Gala",
           sci: "Colletotrichum spp.",
-          risk: "Não Favorável",
-          action: "Sem ação necessária no momento",
-        },
-      ],
-      alertCause: [
-        {
-          label: "Horas de folha molhada com chuva",
-          value: "8 h",
-          threshold:
-            "Sarna a partir de 9 horas\nMancha de Gala a partir de 10 horas",
-          critical: true,
-        },
-        {
-          label: "Temperatura média no período úmido",
-          value: "15.5°C",
-          threshold: "Acima de 14.9°C favorece a Mancha de Gala",
-          critical: false,
-        },
-        {
-          label: "Umidade relativa do ar",
-          value: "91%",
-          threshold: "Acima de 90% a folha é considerada molhada",
-          critical: true,
-        },
-        {
-          label: "Chuva acumulada enquanto folha molhada",
-          value: "21 mm",
-          threshold: "Qualquer chuva durante molhamento ativa o risco",
-          critical: true,
+          risk: "Pouco Favorável",
+          action: "",
+          description:
+            "Doença fúngica que causa lesões necróticas nas folhas, levando ao ressecamento prematuro e desfolha significativa, comprometendo a produção.",
+          conditions:
+            "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C e alta umidade relativa.",
+          alertCause: [
+            {
+              label: "Folha molhada com chuva",
+              value: "8 h",
+              threshold: "Alerta: 10 horas",
+              critical: false,
+            },
+            {
+              label: "Temperatura no período úmido",
+              value: "15.5°C",
+              threshold: "Alerta: acima de 14.9°C",
+              critical: true,
+            },
+            {
+              label: "Umidade relativa",
+              value: "91%",
+              threshold: "Alerta: acima de 90%",
+              critical: true,
+            },
+          ],
         },
       ],
       codependency: [
-        "Falta apenas 1 hora de molhamento com chuva para a Sarna atingir nível de alerta.",
         "Se o molhamento continuar, a Mancha de Gala também será ativada ao mesmo tempo, pois a temperatura já está acima do limite (15.5°C é maior que 14.9°C).",
         "Uma única hora adicional de chuva pode elevar as duas doenças para Favorável à Doença simultaneamente.",
       ],
@@ -186,9 +337,8 @@ const App = () => {
         temp: "15.5°C",
         hum: "91%",
         wetness: "8 h",
-        rain: "21 mm",
+        rain: "8 mm",
         wind: "10 km/h",
-        dewPoint: "11°C",
       },
     },
     {
@@ -196,6 +346,7 @@ const App = () => {
       lat: -25.67,
       lng: -50.3,
       name: "Est. São João do Triunfo",
+      city: "São João do Triunfo",
       status: "Saudável",
       diseaseRisk: "Não Favorável",
       fase: "Brotação, ponteira verde",
@@ -206,52 +357,69 @@ const App = () => {
           sci: "Venturia inaequalis",
           risk: "Não Favorável",
           action: "Sem ação necessária",
+          description:
+            "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas, reduzindo a qualidade comercial e afetando a produtividade.",
+          conditions:
+            "Requer períodos prolongados de folha molhada com chuva, umidade relativa acima de 90% e temperaturas moderadas.",
+          alertCause: [
+            {
+              label: "Folha molhada com chuva",
+              value: "0 h",
+              threshold: "Alerta: 9 horas",
+              critical: false,
+            },
+            {
+              label: "Umidade relativa",
+              value: "74%",
+              threshold: "Alerta: acima de 90%",
+              critical: false,
+            },
+            {
+              label: "Chuva acumulada",
+              value: "0 mm",
+              threshold: "Qualquer chuva ativa o risco",
+              critical: false,
+            },
+          ],
         },
         {
           name: "Mancha de Gala",
           sci: "Colletotrichum spp.",
-          risk: "Não Favorável",
+          risk: "Não Provável",
           action: "Sem ação necessária",
+          description:
+            "Doença fúngica que causa lesões necróticas nas folhas, levando ao ressecamento prematuro e desfolha significativa, comprometendo a produção.",
+          conditions:
+            "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C e alta umidade relativa.",
+          alertCause: [
+            {
+              label: "Folha molhada com chuva",
+              value: "0 h",
+              threshold: "Alerta: 10 horas",
+              critical: false,
+            },
+            {
+              label: "Temperatura no período úmido",
+              value: "14.8°C",
+              threshold: "Alerta: acima de 14.9°C",
+              critical: false,
+            },
+            {
+              label: "Umidade relativa",
+              value: "74%",
+              threshold: "Alerta: acima de 90%",
+              critical: false,
+            },
+          ],
         },
       ],
-      alertCause: [
-        {
-          label: "Horas de folha molhada com chuva",
-          value: "0 h",
-          threshold:
-            "Sarna a partir de 9 horas\nMancha de Gala a partir de 10 horas",
-          critical: false,
-        },
-        {
-          label: "Temperatura média no período úmido",
-          value: "Sem dados",
-          threshold: "Acima de 14.9°C favorece a Mancha de Gala",
-          critical: false,
-        },
-        {
-          label: "Umidade relativa do ar",
-          value: "74%",
-          threshold: "Acima de 90% a folha é considerada molhada",
-          critical: false,
-        },
-        {
-          label: "Chuva acumulada enquanto folha molhada",
-          value: "0 mm",
-          threshold: "Qualquer chuva durante molhamento ativa o risco",
-          critical: false,
-        },
-      ],
-      codependency: [
-        "Sem chuva e com umidade abaixo de 90%, a folha não está molhada, nenhuma doença pode ser ativada.",
-        "Enquanto não houver molhamento com chuva ao mesmo tempo, o risco permanece zero para ambas as doenças.",
-      ],
+      codependency: null,
       station: {
         temp: "14.8°C",
         hum: "74%",
         wetness: "0 h",
         rain: "0 mm",
         wind: "18 km/h",
-        dewPoint: "7°C",
       },
     },
   ];
@@ -299,10 +467,11 @@ const App = () => {
   useEffect(() => {
     if (!leafletLoaded || !mapRef.current || mapInstanceRef.current) return;
     const L = window.L;
-    // Centered on Paraná state, zoom 7 shows the full state
-    const map = L.map(mapRef.current, { zoomControl: true }).setView(
+    // Centered on Paraná state - zoom 6 para mobile, 7 para desktop (mais vista geral)
+    const zoomLevel = isDesktop ? 7 : 6;
+    const map = L.map(mapRef.current, { zoomControl: false }).setView(
       [-24.5, -51.5],
-      8,
+      zoomLevel,
     );
     mapInstanceRef.current = map;
 
@@ -336,8 +505,8 @@ const App = () => {
 
   useEffect(() => {
     if (!leafletLoaded || !window.L) return;
-    // Não mostrar markers na primeira vez (antes de filtrar)
-    if (isDesktop && !filtersApplied) return;
+    // Não mostrar markers na primeira vez (antes de filtrar) - tanto desktop quanto mobile
+    if (!filtersApplied) return;
 
     const L = window.L;
     markers.forEach((m) => {
@@ -371,9 +540,9 @@ const App = () => {
         className="z-50 shadow-md sticky top-0"
         style={{ background: C.green }}
       >
-        <div className="px-3 md:px-6 py-3 flex items-center justify-between md:justify-center gap-3 relative min-h-12">
+        <div className="px-3 md:px-6 py-3 md:py-0 flex items-center justify-between gap-3 min-h-12 md:min-h-18">
           {/* Logo + Title */}
-          <div className="flex items-center shrink-0 md:absolute md:left-6 gap-2 md:gap-3">
+          <div className="flex items-center shrink-0 gap-2 md:gap-3">
             <img
               src="/images/image.webp"
               alt="IDR-Paraná"
@@ -383,7 +552,7 @@ const App = () => {
             <div
               className="border-l"
               style={{
-                borderColor: "rgba(255, 255, 255, 0.3)",
+                borderColor: "rgba(255,255,255,0.3)",
                 paddingLeft: "8px",
               }}
             >
@@ -402,10 +571,10 @@ const App = () => {
             </div>
           </div>
 
-          {/* Filters + Filtrar button grouped together - only show after first filter */}
-          {filtersApplied && (
-            <div className="flex-1 max-w-4xl hidden md:flex items-center gap-2">
-              {[
+          {/* Filtros — desktop apenas */}
+          {filtersApplied &&
+            (() => {
+              const filters = [
                 {
                   icon: Sprout,
                   placeholder: "Fruta",
@@ -455,71 +624,242 @@ const App = () => {
                   ],
                   locked: !selectedCrop,
                 },
-              ].map((f, i) => (
-                <div key={i} className="relative flex-1">
-                  <f.icon
-                    size={15}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{ color: f.locked ? "#c4c4c4" : C.greenMid }}
-                  />
-                  <select
-                    disabled={f.locked}
-                    className="w-full pl-9 pr-7 py-2 appearance-none rounded-lg text-xs font-semibold outline-none transition-all"
-                    style={{
-                      background: f.locked ? "#f3f4f6" : C.white,
-                      border: `1px solid ${f.locked ? "#e5e7eb" : C.border}`,
-                      color: f.val ? C.textDark : "#9ca3af",
-                      cursor: f.locked ? "not-allowed" : "pointer",
-                      opacity: f.locked ? 0.6 : 1,
-                    }}
-                    value={f.val}
-                    onChange={(e) => f.set(e.target.value)}
-                  >
-                    <option value="">{f.placeholder}</option>
-                    {f.opts.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={13}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{ color: f.locked ? "#c4c4c4" : C.greenMid }}
-                  />
-                </div>
-              ))}
-              <button
-                className="shrink-0 px-5 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-md transition-all"
-                style={{ background: C.white, color: C.green }}
-                onClick={() => setFiltersApplied(true)}
-              >
-                <Search size={15} /> FILTRAR
-              </button>
-            </div>
-          )}
+              ];
 
-          {/* Spacer to maintain header height when no filters */}
+              // VERSÃO COMPACT (original)
+              if (filterLayout === "compact") {
+                return (
+                  <div className="hidden md:flex items-center justify-center flex-1 min-w-0 py-3">
+                    <div className="flex items-center gap-3 w-full max-w-2xl min-w-0">
+                      {/* Grid 2×2 responsivo */}
+                      <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1.5 min-w-0">
+                        {filters.map((f, i) => (
+                          <div key={i} className="relative min-w-0">
+                            <f.icon
+                              size={13}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                              style={{
+                                color: f.locked ? "#c4c4c4" : C.greenMid,
+                              }}
+                            />
+                            <select
+                              disabled={f.locked}
+                              className="w-full min-w-0 pl-8 pr-6 py-1.5 appearance-none rounded-lg text-xs font-semibold outline-none transition-all truncate"
+                              style={{
+                                background: f.locked
+                                  ? "rgba(255,255,255,0.15)"
+                                  : C.white,
+                                border: `1px solid ${f.locked ? "rgba(255,255,255,0.2)" : C.border}`,
+                                color: f.val ? C.textDark : "#9ca3af",
+                                cursor: f.locked ? "not-allowed" : "pointer",
+                                opacity: f.locked ? 0.55 : 1,
+                              }}
+                              value={f.val}
+                              onChange={(e) => f.set(e.target.value)}
+                            >
+                              <option value="">{f.placeholder}</option>
+                              {f.opts.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              size={11}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                              style={{
+                                color: f.locked ? "#c4c4c4" : C.greenMid,
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {/* Botão de alternância */}
+                      <button
+                        title="Alternar layout de filtros"
+                        onClick={() => setFilterLayout("sidebar")}
+                        className="shrink-0 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-all"
+                        style={{
+                          background: "rgba(255,255,255,0.2)",
+                          color: C.white,
+                          border: `1px solid rgba(255,255,255,0.3)`,
+                        }}
+                      >
+                        ≡
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+            })()}
+
+          {/* Spacer quando sem filtros */}
           {!filtersApplied && (
-            <div className="flex-1 max-w-4xl hidden md:flex"></div>
+            <div className="flex-1 max-w-3xl hidden md:flex" />
           )}
-
-          {/* Sair */}
-          <button
-            className="md:hidden px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shrink-0"
-            style={{
-              background: C.white,
-              color: C.green,
-              border: `1px solid ${C.border}`,
-            }}
-          >
-            <X size={15} /> SAIR
-          </button>
         </div>
       </header>
 
       {/* ── MAP AREA ── */}
       <main className="flex-1 relative overflow-hidden">
+        {/* SIDEBAR FILTRO — Versão melhorada, apenas desktop e quando layout=sidebar */}
+        {filtersApplied &&
+          filterLayout === "sidebar" &&
+          isDesktop &&
+          (() => {
+            const filters = [
+              {
+                icon: Sprout,
+                label: "Fruta",
+                placeholder: "Selecione a fruta",
+                val: selectedCrop,
+                set: setSelectedCrop,
+                opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                locked: false,
+              },
+              {
+                icon: TrendingUp,
+                label: "Fase",
+                placeholder: "Selecione a fase",
+                val: selectedPhase,
+                set: setSelectedPhase,
+                opts: [
+                  "Dormência",
+                  "Brotação",
+                  "Floração",
+                  "Frutificação",
+                  "Colheita",
+                ],
+                locked: !selectedCrop,
+              },
+              {
+                icon: Bug,
+                label: "Doença",
+                placeholder: "Selecione a doença",
+                val: selectedDisease,
+                set: setSelectedDisease,
+                opts: [
+                  "Sarna da Maçã",
+                  "Mancha de Gala",
+                  "Podridão Amarga",
+                  "Míldio",
+                ],
+                locked: !selectedCrop,
+              },
+              {
+                icon: MapPin,
+                label: "Município",
+                placeholder: "Selecione o município",
+                val: selectedCity,
+                set: setSelectedCity,
+                opts: [
+                  "Lapa",
+                  "Fraiburgo",
+                  "Vacaria",
+                  "São Joaquim",
+                  "Londrina",
+                ],
+                locked: !selectedCrop,
+              },
+            ];
+
+            return (
+              <div
+                className="absolute left-6 top-6 z-30 hidden md:flex flex-col p-6 rounded-2xl shadow-lg backdrop-blur-sm animate-in"
+                style={{
+                  background: "rgba(255,255,255,0.95)",
+                  border: `1px solid ${C.border}`,
+                  width: "300px",
+                  maxHeight: "calc(100vh - 48px)",
+                  overflowY: "auto",
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3
+                      className="text-sm font-bold"
+                      style={{ color: C.textDark }}
+                    >
+                      Filtros
+                    </h3>
+                    <p className="text-xs mt-1" style={{ color: "#6b7280" }}>
+                      Personalize sua busca
+                    </p>
+                  </div>
+                  <button
+                    title="Voltar para layout compacto"
+                    onClick={() => setFilterLayout("compact")}
+                    className="p-2 rounded-lg transition-all hover:bg-slate-100"
+                    style={{ color: C.green }}
+                  >
+                    ≡
+                  </button>
+                </div>
+
+                {/* Filtros em coluna */}
+                <div className="space-y-4">
+                  {filters.map((f, i) => (
+                    <div key={i}>
+                      <label
+                        className="text-xs font-semibold uppercase tracking-wider"
+                        style={{ color: C.textDark }}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <f.icon
+                            size={14}
+                            style={{
+                              color: f.locked ? "#c4c4c4" : C.greenMid,
+                            }}
+                          />
+                          {f.label}
+                        </div>
+                      </label>
+                      <select
+                        disabled={f.locked}
+                        className="w-full px-3 py-2.5 appearance-none rounded-lg text-sm font-medium outline-none transition-all"
+                        style={{
+                          background: f.locked ? "#f3f4f6" : C.white,
+                          border: `1.5px solid ${f.locked ? "#e5e7eb" : C.border}`,
+                          color: f.val ? C.textDark : "#9ca3af",
+                          cursor: f.locked ? "not-allowed" : "pointer",
+                          opacity: f.locked ? 0.55 : 1,
+                        }}
+                        value={f.val}
+                        onChange={(e) => f.set(e.target.value)}
+                      >
+                        <option value="">{f.placeholder}</option>
+                        {f.opts.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Status */}
+                <div
+                  className="mt-6 pt-4 text-xs rounded-lg p-3"
+                  style={{
+                    background: C.greenUltra,
+                    border: `1px solid ${C.greenPale}`,
+                    color: C.green,
+                  }}
+                >
+                  <p className="font-semibold mb-1">Filtros Selecionados</p>
+                  <p className="opacity-75">
+                    {selectedCrop ? `${selectedCrop}` : "Selecione uma fruta"}
+                    {selectedPhase ? ` • ${selectedPhase}` : ""}
+                    {selectedDisease ? ` • ${selectedDisease}` : ""}
+                    {selectedCity ? ` • ${selectedCity}` : ""}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
         <div
           className="absolute inset-0"
           style={{ isolation: "isolate", zIndex: 0 }}
@@ -530,14 +870,14 @@ const App = () => {
         {/* Backdrop for first-access modal */}
         {isDesktop && !filtersApplied && (
           <div
-            className="absolute inset-0 z-10 transition-opacity duration-300"
+            className="absolute inset-0 z-40 transition-opacity duration-300"
             style={{ background: "rgba(0, 0, 0, 0.5)" }}
           />
         )}
 
         {/* Desktop first-access modal with filters */}
         {isDesktop && !filtersApplied && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-auto transition-opacity duration-300">
+          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-auto transition-opacity duration-300">
             <div
               className="p-8 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 transform transition-all duration-300"
               style={{ background: C.white, border: `1px solid ${C.border}` }}
@@ -691,6 +1031,7 @@ const App = () => {
             onClick={() => {
               setShowBottomSheet(false);
               setShowFilterSheet(false);
+              setActiveMarker(null);
             }}
           />
         )}
@@ -839,13 +1180,15 @@ const App = () => {
             ...(isDesktop
               ? {
                   top: "0.75rem",
-                  left: "0.75rem",
-                  right: "0.75rem",
+                  left: "50%",
+                  transform: showBottomSheet
+                    ? "translateX(-50%) translateY(0) scale(1)"
+                    : "translateX(-50%) translateY(-12px) scale(0.98)",
+                  width: "fit-content",
+                  minWidth: "420px",
+                  maxWidth: "calc(100% - 1.5rem)",
                   maxHeight: "calc(100% - 1.5rem)",
                   opacity: showBottomSheet ? 1 : 0,
-                  transform: showBottomSheet
-                    ? "translateY(0) scale(1)"
-                    : "translateY(-12px) scale(0.98)",
                   pointerEvents: showBottomSheet ? "auto" : "none",
                 }
               : {
@@ -880,29 +1223,41 @@ const App = () => {
           )}
 
           <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pb-8 pt-3">
-            {/* ── Header ── */}
-            <div className="flex items-start justify-between mb-5">
+            {/* ── Header: Estação + Cidade ── */}
+            <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div
                   className="p-2.5 rounded-xl shrink-0"
                   style={{
-                    background: riskBg(activeMarker?.diseaseRisk),
+                    background: riskBg(getMaxRisk(activeMarker?.station)),
                   }}
                 >
                   <MapPin
                     size={22}
                     style={{
-                      color: riskColor(activeMarker?.diseaseRisk),
+                      color: riskColor(getMaxRisk(activeMarker?.station)),
                     }}
                   />
                 </div>
                 <div className="min-w-0">
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-wider"
+                    style={{ color: "#9ca3af" }}
+                  >
+                    Estação
+                  </p>
                   <h2
                     className="text-base font-bold tracking-tight leading-tight"
                     style={{ color: C.textDark }}
                   >
                     {activeMarker?.name}
                   </h2>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <MapPin size={11} style={{ color: "#9ca3af" }} />
+                    <p className="text-[11px]" style={{ color: "#6b7280" }}>
+                      {activeMarker?.city}
+                    </p>
+                  </div>
                 </div>
               </div>
               <button
@@ -917,278 +1272,45 @@ const App = () => {
               </button>
             </div>
 
-            {/* ── Fase + Doença ── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div
-                className="p-3 rounded-2xl flex items-center gap-3"
-                style={{
-                  background: C.panelBg,
-                  border: `1px solid ${C.border}`,
-                }}
-              >
-                <div
-                  className="p-2 rounded-xl shrink-0"
-                  style={{ background: C.greenUltra, color: C.green }}
-                >
-                  <Sprout size={18} />
-                </div>
-                <div className="min-w-0">
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: "#9ca3af" }}
-                  >
-                    Fase Fenológica
-                  </p>
-                  <p
-                    className="text-sm font-bold mt-0.5 leading-tight"
-                    style={{ color: C.textDark }}
-                  >
-                    {activeMarker?.fase}
-                  </p>
-                </div>
-              </div>
-              <div
-                className="p-3 rounded-2xl"
-                style={{
-                  background: C.panelBg,
-                  border: `1px solid ${C.border}`,
-                }}
-              >
-                <div className="flex items-center gap-2 mb-2.5">
-                  <Bug
-                    size={14}
-                    style={{ color: riskColor(activeMarker?.diseaseRisk) }}
-                  />
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: "#9ca3af" }}
-                  >
-                    Doenças Monitoradas
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {activeMarker?.diseases?.map((d, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start justify-between gap-2 p-2 rounded-xl"
-                      style={{
-                        background: C.white,
-                        border: `1px solid ${C.border}`,
-                      }}
-                    >
-                      <div className="min-w-0">
-                        <p
-                          className="text-xs font-bold leading-tight"
-                          style={{ color: C.textDark }}
-                        >
-                          {d.name}
-                        </p>
-                        <p
-                          className="text-[10px] italic"
-                          style={{ color: "#6b7280" }}
-                        >
-                          {d.sci}
-                        </p>
-                        <p
-                          className="text-[10px] mt-1"
-                          style={{ color: "#4b5563" }}
-                        >
-                          {d.action}
-                        </p>
-                      </div>
-                      <span
-                        className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide text-white shrink-0 mt-0.5"
-                        style={{ background: riskColor(d.risk) }}
-                      >
-                        {d.risk}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Causa do Alerta ── */}
+            {/* ── Fase da Fruta ── */}
             <div
-              className="p-3 rounded-2xl mb-3"
-              style={{ background: C.panelBg, border: `1px solid ${C.border}` }}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-3"
+              style={{
+                background: C.greenUltra,
+                border: `1px solid ${C.greenPale}`,
+              }}
             >
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle
-                  size={13}
-                  style={{ color: riskColor(activeMarker?.diseaseRisk) }}
-                />
+              <div
+                className="p-1.5 rounded-lg shrink-0"
+                style={{ background: C.white }}
+              >
+                <Sprout size={15} style={{ color: C.green }} />
+              </div>
+              <div>
                 <p
-                  className="text-[10px] font-black uppercase tracking-wider"
+                  className="text-[9px] font-bold uppercase tracking-wider"
+                  style={{ color: C.greenMid }}
+                >
+                  Fase Fenológica
+                </p>
+                <p
+                  className="text-xs font-semibold leading-tight"
                   style={{ color: C.textDark }}
                 >
-                  Causa do Alerta
+                  {activeMarker?.fase}
                 </p>
-              </div>
-              {/* Mobile: lista horizontal compacta | Desktop: grid de cards */}
-              <div className="flex flex-col gap-2 sm:hidden">
-                {activeMarker?.alertCause?.map((v, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between px-3 py-2.5 rounded-xl"
-                    style={{
-                      background: v.critical
-                        ? riskBg(activeMarker.diseaseRisk)
-                        : C.white,
-                      border: `1px solid ${v.critical ? riskBorder(activeMarker.diseaseRisk) : C.border}`,
-                    }}
-                  >
-                    <div className="min-w-0 mr-3">
-                      <p
-                        className="text-xs font-semibold"
-                        style={{ color: C.textDark }}
-                      >
-                        {v.label}
-                      </p>
-                      <p
-                        className="text-[10px]"
-                        style={{ color: "#9ca3af", whiteSpace: "pre-line" }}
-                      >
-                        {v.threshold}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p
-                        className="text-base font-black"
-                        style={{
-                          color: v.critical
-                            ? riskColor(activeMarker.diseaseRisk)
-                            : C.textDark,
-                        }}
-                      >
-                        {v.value}
-                      </p>
-                      <div className="flex items-center justify-end gap-1">
-                        <div
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{
-                            background: v.critical
-                              ? riskColor(activeMarker.diseaseRisk)
-                              : C.greenMid,
-                          }}
-                        />
-                        <span
-                          className="text-[9px] font-bold"
-                          style={{
-                            color: v.critical
-                              ? riskColor(activeMarker.diseaseRisk)
-                              : C.greenMid,
-                          }}
-                        >
-                          {v.critical ? "Acima" : "Normal"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="hidden sm:grid sm:grid-cols-2 md:grid-cols-4 gap-3">
-                {activeMarker?.alertCause?.map((v, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-xl"
-                    style={{
-                      background: v.critical
-                        ? riskBg(activeMarker.diseaseRisk)
-                        : C.white,
-                      border: `1px solid ${v.critical ? riskBorder(activeMarker.diseaseRisk) : C.border}`,
-                    }}
-                  >
-                    <p
-                      className="text-[9px] font-bold uppercase tracking-wide mb-1"
-                      style={{ color: "#9ca3af" }}
-                    >
-                      {v.label}
-                    </p>
-                    <p
-                      className="text-lg font-black"
-                      style={{
-                        color: v.critical
-                          ? riskColor(activeMarker.diseaseRisk)
-                          : C.textDark,
-                      }}
-                    >
-                      {v.value}
-                    </p>
-                    <p
-                      className="text-[10px] mt-0.5"
-                      style={{ color: "#9ca3af", whiteSpace: "pre-line" }}
-                    >
-                      {v.threshold}
-                    </p>
-                    <div className="flex items-center gap-1 mt-1.5">
-                      <div
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{
-                          background: v.critical
-                            ? riskColor(activeMarker.diseaseRisk)
-                            : C.greenMid,
-                        }}
-                      />
-                      <span
-                        className="text-[9px] font-bold"
-                        style={{
-                          color: v.critical
-                            ? riskColor(activeMarker.diseaseRisk)
-                            : C.greenMid,
-                        }}
-                      >
-                        {v.critical ? "Acima do limiar" : "Normal"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ── Codependência ── */}
-            <div
-              className="p-3 rounded-2xl mb-3"
-              style={{ background: C.panelBg, border: `1px solid ${C.border}` }}
-            >
-              <p
-                className="text-[10px] font-black uppercase tracking-wider mb-2.5"
-                style={{ color: C.textDark }}
-              >
-                Condições Agravantes
-              </p>
-              <div className="flex flex-col gap-2">
-                {activeMarker?.codependency?.map((c, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <div
-                      className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-                      style={{
-                        background: riskColor(activeMarker.diseaseRisk),
-                      }}
-                    />
-                    <p
-                      className="text-xs leading-snug"
-                      style={{ color: "#4b5563" }}
-                    >
-                      {c}
-                    </p>
-                  </div>
-                ))}
               </div>
             </div>
 
             {/* ── Dados da Estação ── */}
-            <div
-              className="p-3 rounded-2xl mb-4"
-              style={{ background: C.panelBg, border: `1px solid ${C.border}` }}
-            >
+            <div className="mb-3">
               <p
-                className="text-[10px] font-black uppercase tracking-wider mb-2.5"
-                style={{ color: C.textDark }}
+                className="text-[10px] font-black uppercase tracking-wider mb-2 px-1"
+                style={{ color: "#9ca3af" }}
               >
                 Dados da Estação
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                 {[
                   {
                     icon: ThermometerSun,
@@ -1222,47 +1344,184 @@ const App = () => {
                     icon: Wind,
                     label: "Vento",
                     val: activeMarker?.station?.wind,
-                    bg: C.background,
+                    bg: "#f3f4f6",
                     color: "#6b7280",
-                  },
-                  {
-                    icon: Droplets,
-                    label: "Pto. Orvalho",
-                    val: activeMarker?.station?.dewPoint,
-                    bg: C.greenUltra,
-                    color: C.greenMid,
                   },
                 ].map((s, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-2.5 p-2.5 rounded-xl sm:flex-col sm:items-center sm:text-center sm:p-3"
+                    className="flex flex-col items-center text-center p-2.5 rounded-xl"
                     style={{
                       background: C.white,
                       border: `1px solid ${C.border}`,
                     }}
                   >
                     <div
-                      className="p-1.5 rounded-lg shrink-0 sm:mb-1"
+                      className="p-1.5 rounded-lg mb-1"
                       style={{ background: s.bg, color: s.color }}
                     >
-                      <s.icon size={14} />
+                      <s.icon size={13} />
                     </div>
-                    <div className="sm:text-center">
-                      <p
-                        className="text-[9px] font-bold uppercase tracking-wide leading-tight"
-                        style={{ color: "#9ca3af" }}
-                      >
-                        {s.label}
-                      </p>
-                      <p
-                        className="text-sm font-black mt-0.5"
-                        style={{ color: C.textDark }}
-                      >
-                        {s.val}
-                      </p>
-                    </div>
+                    <p
+                      className="text-[9px] font-bold uppercase tracking-wide leading-tight"
+                      style={{ color: "#9ca3af" }}
+                    >
+                      {s.label}
+                    </p>
+                    <p
+                      className="text-sm font-black mt-0.5"
+                      style={{ color: C.textDark }}
+                    >
+                      {s.val}
+                    </p>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* ── Doenças ── */}
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <Bug
+                  size={13}
+                  style={{
+                    color: riskColor(getMaxRisk(activeMarker?.station)),
+                  }}
+                />
+                <p
+                  className="text-[10px] font-black uppercase tracking-wider"
+                  style={{ color: "#9ca3af" }}
+                >
+                  Doenças Monitoradas
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {activeMarker?.diseases?.map((d, i) => {
+                  // Calcula o risco com base nos dados da estação
+                  const calculated = getCalculatedRisks(activeMarker.station);
+                  let displayRisk = d.risk; // Valor padrão
+
+                  if (d.name === "Sarna da Maçã") {
+                    displayRisk = calculated.sarnaRisk;
+                  } else if (d.name === "Mancha de Gala") {
+                    displayRisk = calculated.galaRisk;
+                  }
+
+                  return (
+                    <div
+                      key={i}
+                      className="p-2.5 rounded-xl"
+                      style={{
+                        background: C.white,
+                        border: `1px solid ${riskBorder(displayRisk)}`,
+                      }}
+                    >
+                      {/* Header: Nome + Risco */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className="text-xs font-bold leading-tight"
+                            style={{ color: C.textDark }}
+                          >
+                            {d.name}
+                          </p>
+                          <p
+                            className="text-[10px] italic"
+                            style={{ color: "#6b7280" }}
+                          >
+                            {d.sci}
+                          </p>
+                        </div>
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide text-white shrink-0"
+                          style={{ background: riskColor(displayRisk) }}
+                        >
+                          {displayRisk}
+                        </span>
+                      </div>
+
+                      {/* Descrição + Condições: Bloco Unificado */}
+                      {(d.description || d.conditions) && (
+                        <div
+                          className="mb-2 p-2.5 rounded-lg space-y-2"
+                          style={{
+                            background: "#f3f4f6",
+                            border: `1px solid #e5e7eb`,
+                          }}
+                        >
+                          {d.description && (
+                            <p
+                              className="text-[10px] leading-relaxed"
+                              style={{ color: "#374151" }}
+                            >
+                              <span style={{ fontWeight: "bold" }}>Sobre:</span>{" "}
+                              {d.description}
+                            </p>
+                          )}
+                          {d.conditions && (
+                            <p
+                              className="text-[10px] leading-relaxed"
+                              style={{ color: "#374151" }}
+                            >
+                              <span style={{ fontWeight: "bold" }}>
+                                Condições:
+                              </span>{" "}
+                              {d.conditions}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {d.alertCause?.length > 0 && (
+                        <div className="flex flex-col gap-1">
+                          <p
+                            className="text-[9px] font-bold uppercase tracking-wider mb-0.5"
+                            style={{ color: "#9ca3af" }}
+                          >
+                            Causa do Alerta
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {d.alertCause.map((ac, j) => (
+                              <div
+                                key={j}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+                                style={{
+                                  background: ac.critical
+                                    ? riskBg(d.risk)
+                                    : C.background,
+                                  border: `1px solid ${ac.critical ? riskBorder(d.risk) : C.border}`,
+                                }}
+                              >
+                                <span
+                                  className="text-[10px] font-black"
+                                  style={{
+                                    color: ac.critical
+                                      ? riskColor(d.risk)
+                                      : C.textDark,
+                                  }}
+                                >
+                                  {ac.value}
+                                </span>
+                                <span
+                                  className="text-[9px]"
+                                  style={{ color: "#6b7280" }}
+                                >
+                                  {ac.label}
+                                </span>
+                                <span
+                                  className="text-[9px]"
+                                  style={{ color: "#9ca3af" }}
+                                >
+                                  · {ac.threshold}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1403,8 +1662,8 @@ const App = () => {
           </div>
         </div>
 
-        {/* Floating filter button (mobile only) - Fixed position */}
-        {!showFilterSheet && (
+        {/* Floating filter button (mobile only) - Fixed position, hidden until filters applied */}
+        {!showFilterSheet && filtersApplied && (
           <button
             className="fixed right-4 bottom-6 z-20 md:hidden flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all"
             style={{ background: C.green, color: C.white }}
