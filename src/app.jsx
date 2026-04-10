@@ -1380,7 +1380,7 @@ if (filterLayout === "compact") {
         {/* Causas do Alerta (Dados integrados) */}
         <div className="space-y-2.5">
           <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>
-            Fatores de Risco Atuais
+            Motivo do Alerta
           </p>
           <div className="grid grid-cols-1 gap-2">
             {d.alertCause?.map((ac, j) => {
