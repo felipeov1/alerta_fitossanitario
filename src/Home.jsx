@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import { Sprout } from "lucide-react";
 
 const C = {
@@ -13,8 +12,6 @@ const C = {
 };
 
 export default function Home() {
-  const navigate = useNavigate();
-
   return (
     <div
       className="flex flex-col items-center justify-center min-h-screen font-sans"
@@ -40,7 +37,7 @@ export default function Home() {
         {/* Versões */}
         <div className="flex flex-col gap-3 w-full">
           <button
-            onClick={() => navigate("/v1")}
+            onClick={() => window.open("/v1", "_blank")}
             className="w-full py-4 px-5 rounded-xl font-bold text-base transition-all hover:opacity-90 flex flex-col items-center gap-0.5"
             style={{ background: C.green, color: C.white }}
           >
@@ -49,7 +46,7 @@ export default function Home() {
           </button>
 
           <button
-            onClick={() => navigate("/v2")}
+            onClick={() => window.open("/v2", "_blank")}
             className="w-full py-4 px-5 rounded-xl font-bold text-base transition-all hover:opacity-90 flex flex-col items-center gap-0.5"
             style={{
               background: C.white,
