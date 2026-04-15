@@ -15,6 +15,8 @@ import {
   LocateFixed,
   Plus,
   Minus,
+  BookOpen,
+  Info,
 } from "lucide-react";
 
 // Palette
@@ -69,45 +71,42 @@ const calculateDiseaseRisk = (station) => {
     tmedValue,
   });
 
-  // PMF (Período de Molhamento Foliar): 1 se UR > 90%, senão 0
+  // PMF (Período de Molhamento Foliar): 1 se UR > 90% (estrito), senão 0
   const pmf = urValue > 90 ? 1 : 0;
 
-  // PMF com Chuva: 1 se teve molhamento E chuva
+  // PMF com Chuva: 1 se houver folha molhada E chuva acumulada > 0
   const pmfChuva = pmf === 1 && chuvaValue > 0 ? 1 : 0;
 
-  // PMF em Horas (simulado com base em chuva e umidade)
-  // Se houve chuva com UR alta, acumula horas (cada mm de chuva = ~1h de molhamento)
-  const pmfHs = pmfChuva > 0 ? chuvaValue : 0;
+  // Horas de molhamento: usa o campo wetness do objeto se disponível, senão chuva como proxy
+  const wetnessRaw = station.wetness;
+  const wetnessHours = wetnessRaw
+    ? parseFloat(wetnessRaw.match(/\d+\.?\d*/)?.[0] || 0)
+    : 0;
+  const pmfHs = pmfChuva > 0 ? (wetnessHours > 0 ? wetnessHours : chuvaValue) : 0;
 
-  // Temperatura média acumulada durante molhamento
+  // Temperatura média acumulada durante o período de molhamento
   const tmedAc = pmfChuva > 0 ? tmedValue : 0;
 
-  console.log("Calculations:", {
-    pmf,
-    pmfChuva,
-    pmfHs,
-    tmedAc,
-    product: pmfHs * tmedAc,
-  });
-
-  // SARNA: Precisa pmfChuva E horas E temperatura
+  // SARNA
+  // - FAVORÁVEL:       pmfHs >= 9 E (pmfHs × tmedAc) >= 140
+  // - POUCO FAVORÁVEL: pmfChuva = 1 E pmfHs < 9
+  // - NÃO FAVORÁVEL:   pmfChuva < 1 OU pmfHs >= 900 OU (pmfHs >= 9 E força < 140)
   let sarnaRisk = "Não Favorável";
   if (pmfChuva < 1) {
     sarnaRisk = "Não Favorável";
   } else if (pmfHs < 9) {
     sarnaRisk = "Pouco Favorável";
-  } else if (pmfHs < 900) {
-    // Verifica se (pmfHs × tmedAc) >= 140
-    if (pmfHs * tmedAc >= 140) {
-      sarnaRisk = "Favorável à Doença";
-    } else {
-      sarnaRisk = "Pouco Favorável";
-    }
+  } else if (pmfHs >= 900) {
+    sarnaRisk = "Não Favorável";
+  } else if (pmfHs * tmedAc >= 140) {
+    sarnaRisk = "Favorável à Doença";
+  } else {
+    sarnaRisk = "Não Favorável"; // >= 9h mas força insuficiente
   }
 
-  console.log("Disease Risk:", { sarnaRisk });
-
-  // MANCHA DE GALA: Precisa de pmfHs >= 10 E tmedAc > 14.9
+  // MANCHA DE GALA
+  // - FAVORÁVEL:    pmfHs >= 10 E tmedAc > 14.9
+  // - NÃO FAVORÁVEL: pmfHs < 10 OU tmedAc <= 14.9
   let galaRisk = "Não Favorável";
   if (pmfHs >= 10 && tmedAc > 14.9) {
     galaRisk = "Favorável à Doença";
@@ -116,46 +115,45 @@ const calculateDiseaseRisk = (station) => {
   return { sarnaRisk, galaRisk };
 };
 
-// Manual da prevenção para maçã
-const PREVENTION_MANUAL = {
-  fruit: "Maçã",
-  diseases: [
-    {
-      name: "Sarna da Maçã",
-      sci: "Venturia inaequalis",
-      color: "#d32f2f",
-      bgColor: "#fef2f2",
-      borderColor: "#fecaca",
-      icon: "🍎",
-      tips: [
-        "Aplique fungicida preventivo antes de períodos com chuva e temperatura entre 10–24°C.",
-        "Monitore o molhamento foliar — o limiar crítico é 9 horas contínuas com umidade acima de 90%.",
-        "Inspecione os frutos regularmente por manchas escuras ou lesões na superfície.",
-        "Repita a aplicação se houver mais de 25 mm de chuva acumulada em 48 horas.",
-        "Realize podas para melhorar a ventilação e reduzir o período de molhamento foliar.",
-      ],
-    },
-    {
-      name: "Mancha de Gala",
-      sci: "Colletotrichum spp.",
-      color: "#ca8a04",
-      bgColor: "#fefce8",
-      borderColor: "#fef08a",
-      icon: "🍃",
-      tips: [
-        "Temperatura acima de 14,9°C durante molhamento exige ação preventiva imediata.",
-        "Aplique fungicidas específicos para Colletotrichum antes de janelas de chuva previstas.",
-        "Monitore folhas da cultivar Gala após cada evento de precipitação.",
-        "Evite irrigação por aspersão em dias com previsão de molhamento foliar prolongado.",
-        "O limiar crítico é 10 horas de molhamento foliar com temperatura acima de 14,9°C.",
-      ],
-    },
-  ],
-  general: [
-    "Registre as condições climáticas diariamente para identificar padrões de risco.",
-    "Combine métodos preventivos (culturais + químicos) para maior eficácia.",
-    "Consulte os alertas do sistema antes de cada aplicação de fungicida.",
-  ],
+// Manual da prevenção por cultura
+const PREVENTION_MANUALS = {
+  "Maçã": {
+    diseases: [
+      {
+        name: "Sarna da Maçã",
+        sci: "Venturia inaequalis",
+        color: "#d32f2f",
+        bgColor: "#fef2f2",
+        borderColor: "#fecaca",
+        tips: [
+          "Aplique fungicida preventivo antes de períodos com chuva e temperatura entre 10–24°C.",
+          "Monitore o molhamento foliar — o risco começa com 9 horas contínuas de folha molhada com umidade acima de 90%.",
+          "Inspecione os frutos regularmente por manchas escuras ou lesões na superfície.",
+          "Repita a aplicação se houver mais de 25 mm de chuva acumulada em 48 horas.",
+          "Realize podas para melhorar a ventilação e reduzir o período de molhamento foliar.",
+        ],
+      },
+      {
+        name: "Mancha de Gala",
+        sci: "Colletotrichum spp.",
+        color: "#ca8a04",
+        bgColor: "#fefce8",
+        borderColor: "#fef08a",
+        tips: [
+          "Temperatura acima de 14,9°C durante molhamento exige ação preventiva imediata.",
+          "Aplique fungicidas específicos para Colletotrichum antes de janelas de chuva previstas.",
+          "Monitore folhas da cultivar Gala após cada evento de precipitação.",
+          "Evite irrigação por aspersão em dias com previsão de molhamento foliar prolongado.",
+          "O risco se torna crítico com 10 horas ou mais de molhamento foliar e temperatura acima de 14,9°C.",
+        ],
+      },
+    ],
+    general: [
+      "Registre as condições climáticas diariamente para identificar padrões de risco.",
+      "Combine métodos preventivos (culturais + químicos) para maior eficácia.",
+      "Consulte os alertas do sistema antes de cada aplicação de fungicida.",
+    ],
+  }
 };
 
 const App = () => {
@@ -168,12 +166,15 @@ const App = () => {
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
   const [filtersApplied, setFiltersApplied] = useState(false);
-  const [filterLayout, setFilterLayout] = useState("compact"); // "compact" ou "sidebar"
+  const [filterLayout, setFilterLayout] = useState("sidebar"); // "compact" ou "sidebar"
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [selectedForecastDay, setSelectedForecastDay] = useState(0);
   const [showPreventionModal, setShowPreventionModal] = useState(false);
   const [pendingFilterApply, setPendingFilterApply] = useState(false);
   const [skipPreventionManual, setSkipPreventionManual] = useState(false);
+  const [selectedManualCrop, setSelectedManualCrop] = useState("");
+  const [showAlertLegend, setShowAlertLegend] = useState(false);
+  const [farmWetScenario, setFarmWetScenario] = useState("wet");
 
   const bottomSheetRef = useRef(null);
   const headerMenuRef = useRef(null);
@@ -186,7 +187,7 @@ const App = () => {
 
   const handleTouchMove = (e) => {
     if (!touchStartY.current) return;
-    
+
     const currentY = e.touches[0].clientY;
     const diff = currentY - touchStartY.current;
 
@@ -341,11 +342,11 @@ const App = () => {
         wind: "7 km/h",
       },
       forecast: [
-        { day: "Hoje",   date: "14/04", temp: "16°C", hum: "92%", rain: "38mm", sarnaRisk: "Favorável à Doença", galaRisk: "Favorável à Doença" },
-        { day: "Amanhã", date: "15/04", temp: "17°C", hum: "88%", rain: "12mm", sarnaRisk: "Pouco Favorável",    galaRisk: "Não Favorável"       },
-        { day: "Qua",    date: "16/04", temp: "20°C", hum: "72%", rain: "0mm",  sarnaRisk: "Não Favorável",      galaRisk: "Não Favorável"       },
-        { day: "Qui",    date: "17/04", temp: "14°C", hum: "94%", rain: "28mm", sarnaRisk: "Favorável à Doença", galaRisk: "Favorável à Doença" },
-        { day: "Sex",    date: "18/04", temp: "13°C", hum: "96%", rain: "35mm", sarnaRisk: "Favorável à Doença", galaRisk: "Favorável à Doença" },
+        { day: "Hoje", date: "14/04", temp: "16°C", hum: "92%", rain: "38mm", wetness: "11 h", sarnaRisk: "Favorável à Doença", galaRisk: "Favorável à Doença" },
+        { day: "Amanhã", date: "15/04", temp: "17°C", hum: "88%", rain: "12mm", wetness: "7 h", sarnaRisk: "Pouco Favorável", galaRisk: "Não Favorável" },
+        { day: "Qua", date: "16/04", temp: "20°C", hum: "72%", rain: "0mm", wetness: "2 h", sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" },
+        { day: "Qui", date: "17/04", temp: "14°C", hum: "94%", rain: "28mm", wetness: "10 h", sarnaRisk: "Favorável à Doença", galaRisk: "Não Favorável" },
+        { day: "Sex", date: "18/04", temp: "13°C", hum: "96%", rain: "35mm", wetness: "13 h", sarnaRisk: "Favorável à Doença", galaRisk: "Não Favorável" },
       ],
       prevention: {
         sarna: [
@@ -446,15 +447,15 @@ const App = () => {
         wind: "10 km/h",
       },
       forecast: [
-        { day: "Hoje",   date: "14/04", temp: "15°C", hum: "91%", rain: "8mm",  sarnaRisk: "Pouco Favorável",    galaRisk: "Não Favorável"      },
-        { day: "Amanhã", date: "15/04", temp: "16°C", hum: "89%", rain: "5mm",  sarnaRisk: "Pouco Favorável",    galaRisk: "Não Favorável"      },
-        { day: "Qua",    date: "16/04", temp: "18°C", hum: "75%", rain: "0mm",  sarnaRisk: "Não Favorável",      galaRisk: "Não Favorável"      },
-        { day: "Qui",    date: "17/04", temp: "13°C", hum: "93%", rain: "22mm", sarnaRisk: "Favorável à Doença", galaRisk: "Favorável à Doença" },
-        { day: "Sex",    date: "18/04", temp: "12°C", hum: "95%", rain: "18mm", sarnaRisk: "Favorável à Doença", galaRisk: "Favorável à Doença" },
+        { day: "Hoje", date: "14/04", temp: "15°C", hum: "72%", rain: "5mm", wetness: "6 h", sarnaRisk: "Pouco Favorável", galaRisk: "Não Favorável" },
+        { day: "Amanhã", date: "15/04", temp: "16°C", hum: "80%", rain: "15mm", wetness: "11 h", sarnaRisk: "Favorável à Doença", galaRisk: "Favorável à Doença" },
+        { day: "Qua", date: "16/04", temp: "18°C", hum: "75%", rain: "0mm", wetness: "2 h", sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" },
+        { day: "Qui", date: "17/04", temp: "19°C", hum: "85%", rain: "22mm", wetness: "9 h", sarnaRisk: "Favorável à Doença", galaRisk: "Não Favorável" },
+        { day: "Sex", date: "18/04", temp: "17°C", hum: "82%", rain: "10mm", wetness: "7 h", sarnaRisk: "Pouco Favorável", galaRisk: "Não Favorável" },
       ],
       prevention: {
         sarna: [
-          "O molhamento está abaixo do limiar crítico hoje, mas quinta-feira traz risco elevado.",
+          "O molhamento está baixo hoje, mas quinta-feira traz risco elevado.",
           "Programe aplicação preventiva para quarta-feira à tarde, antes das chuvas previstas.",
           "Monitore a UR do ar – quando superar 90% com chuva, o risco se torna crítico.",
           "Verifique a cobertura de fungicida e reaplique se já passaram mais de 10 dias.",
@@ -548,11 +549,11 @@ const App = () => {
         wind: "18 km/h",
       },
       forecast: [
-        { day: "Hoje",   date: "14/04", temp: "14°C", hum: "74%", rain: "0mm", sarnaRisk: "Não Favorável",  galaRisk: "Não Favorável"  },
-        { day: "Amanhã", date: "15/04", temp: "16°C", hum: "68%", rain: "0mm", sarnaRisk: "Não Favorável",  galaRisk: "Não Favorável"  },
-        { day: "Qua",    date: "16/04", temp: "19°C", hum: "65%", rain: "0mm", sarnaRisk: "Não Favorável",  galaRisk: "Não Favorável"  },
-        { day: "Qui",    date: "17/04", temp: "15°C", hum: "82%", rain: "5mm", sarnaRisk: "Não Favorável",  galaRisk: "Não Favorável"  },
-        { day: "Sex",    date: "18/04", temp: "14°C", hum: "85%", rain: "8mm", sarnaRisk: "Pouco Favorável", galaRisk: "Não Favorável" },
+        { day: "Hoje", date: "14/04", temp: "18°C", hum: "65%", rain: "0mm", wetness: "1 h", sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" },
+        { day: "Amanhã", date: "15/04", temp: "20°C", hum: "70%", rain: "0mm", wetness: "1 h", sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" },
+        { day: "Qua", date: "16/04", temp: "19°C", hum: "65%", rain: "0mm", wetness: "0 h", sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" },
+        { day: "Qui", date: "17/04", temp: "18°C", hum: "78%", rain: "8mm", wetness: "5 h", sarnaRisk: "Pouco Favorável", galaRisk: "Não Favorável" },
+        { day: "Sex", date: "18/04", temp: "17°C", hum: "82%", rain: "12mm", wetness: "8 h", sarnaRisk: "Pouco Favorável", galaRisk: "Não Favorável" },
       ],
       prevention: {
         sarna: [
@@ -731,6 +732,22 @@ const App = () => {
             </div>
           </div>
 
+          <button
+            onClick={() => {
+              setSelectedManualCrop(""); // Sempre abre no menu de seleção
+              setShowPreventionModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-bold text-xs md:text-sm transition-all shadow-sm hover:shadow-md"
+            style={{
+              color: C.green,
+              background: C.white,
+              border: `1px solid ${C.border}`
+            }}
+          >
+            <BookOpen size={16} />
+            <span className="hidden sm:inline">Manual de Prevenção</span>
+            <span className="sm:hidden">Manual</span>
+          </button>
         </div>
       </header>
 
@@ -748,7 +765,7 @@ const App = () => {
                 placeholder: "Selecione a fruta",
                 val: selectedCrop,
                 set: setSelectedCrop,
-                opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                opts: ["Maçã"],
                 locked: false,
               },
               {
@@ -874,46 +891,35 @@ const App = () => {
                 </div>
 
                 {/* NOVO BOTÃO DE APLICAR FILTROS NO DESKTOP */}
-      <div className="mt-6">
-        <button
-          className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
-          style={{
-            background: selectedCrop ? C.green : "#9ca3af",
-            color: C.white,
-            cursor: selectedCrop ? "pointer" : "not-allowed",
-          }}
-          disabled={!selectedCrop}
-          onClick={() => {
-            if (skipPreventionManual) {
-              setFiltersApplied(true);
-              setFilterLayout("sidebar");
-            } else {
-              setPendingFilterApply(true);
-              setShowPreventionModal(true);
-            }
-          }}
-        >
-          <Search size={16} /> APLICAR FILTROS
-        </button>
-      </div>
-
-                {/* Status */}
-                <div
-                  className="mt-6 pt-4 text-xs rounded-lg p-3"
-                  style={{
-                    background: C.greenUltra,
-                    border: `1px solid ${C.greenPale}`,
-                    color: C.green,
-                  }}
-                >
-                  <p className="font-semibold mb-1">Filtros Selecionados</p>
-                  <p className="opacity-75">
-                    {selectedCrop ? `${selectedCrop}` : "Selecione uma fruta"}
-                    {selectedPhase ? ` • ${selectedPhase}` : ""}
-                    {selectedDisease ? ` • ${selectedDisease}` : ""}
-                    {selectedCity ? ` • ${selectedCity}` : ""}
-                  </p>
+                <div className="mt-6">
+                  <button
+                    className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
+                    style={{
+                      background: selectedCrop ? C.green : "#9ca3af",
+                      color: C.white,
+                      cursor: selectedCrop ? "pointer" : "not-allowed",
+                    }}
+                    disabled={!selectedCrop}
+                    onClick={() => {
+                      if (skipPreventionManual) {
+                        setFiltersApplied(true);
+                        setFilterLayout("sidebar");
+                      } else {
+                        setPendingFilterApply(true);
+                        if (selectedCrop && PREVENTION_MANUALS[selectedCrop]) {
+                          setSelectedManualCrop(selectedCrop);
+                        } else {
+                          setSelectedManualCrop("");
+                        }
+                        setShowPreventionModal(true);
+                      }
+                    }}
+                  >
+                    <Search size={16} /> APLICAR FILTROS
+                  </button>
                 </div>
+
+               
               </div>
             );
           })()}
@@ -961,7 +967,7 @@ const App = () => {
                     placeholder: "Fruta",
                     val: selectedCrop,
                     set: setSelectedCrop,
-                    opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                    opts: ["Maçã"],
                     locked: false,
                   },
                   {
@@ -1076,6 +1082,11 @@ const App = () => {
                       setFilterLayout("sidebar");
                     } else {
                       setPendingFilterApply(true);
+                      if (selectedCrop && PREVENTION_MANUALS[selectedCrop]) {
+                        setSelectedManualCrop(selectedCrop);
+                      } else {
+                        setSelectedManualCrop("");
+                      }
                       setShowPreventionModal(true);
                     }
                   }}
@@ -1090,9 +1101,9 @@ const App = () => {
         {/* Backdrop geral */}
         {(showBottomSheet || showFilterSheet) && (
           <div
-            className="absolute inset-0 z-10 transition-all duration-300"
+            className="absolute inset-0 z-40 transition-all duration-300"
             style={{
-              background: showFilterSheet ? "rgba(0,0,0,0.45)" : "transparent",
+              background: "rgba(0,0,0,0.55)",
             }}
             onClick={() => {
               setShowBottomSheet(false);
@@ -1142,7 +1153,7 @@ const App = () => {
                       placeholder: "Fruta",
                       val: selectedCrop,
                       set: setSelectedCrop,
-                      opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                      opts: ["Maçã"],
                       locked: false,
                     },
                     {
@@ -1234,6 +1245,11 @@ const App = () => {
                       setFiltersApplied(true);
                     } else {
                       setPendingFilterApply(true);
+                      if (selectedCrop && PREVENTION_MANUALS[selectedCrop]) {
+                        setSelectedManualCrop(selectedCrop);
+                      } else {
+                        setSelectedManualCrop("");
+                      }
                       setShowPreventionModal(true);
                     }
                   }}
@@ -1245,224 +1261,290 @@ const App = () => {
           </div>
         )}
 
-    {/* ── BOTTOM SHEET ── */}
-<div
-  ref={bottomSheetRef}
-  onTouchStart={handleTouchStart}
-  onTouchMove={handleTouchMove}
-  onTouchEnd={handleTouchEnd}
-  className="absolute z-20 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ease-out overflow-y-auto transition-all duration-300"
-  style={{
-    borderRadius: "1rem",
-    ...(isDesktop
-      ? {
-          top: "0.75rem",
-          left: "50%",
-          transform: showBottomSheet
-            ? "translateX(-50%) translateY(0) scale(1)"
-            : "translateX(-50%) translateY(-12px) scale(0.98)",
-          width: "fit-content",
-          minWidth: "420px",
-          maxWidth: "calc(100% - 1.5rem)",
-          maxHeight: "calc(100% - 1.5rem)",
-          opacity: showBottomSheet ? 1 : 0,
-          pointerEvents: showBottomSheet ? "auto" : "none",
-        }
-      : {
-          bottom: "0.5rem",
-          left: "0.5rem",
-          right: "0.5rem",
-          maxHeight: "calc(100% - 1rem)",
-          transform: showBottomSheet
-            ? "translateY(0)"
-            : "translateY(calc(100% + 1rem))",
-        }),
-    background: C.white,
-  }}
->
-  {/* Handle mobile (A "barrinha" de puxar) */}
-  <div className="md:hidden w-14 h-1.5 rounded-full mx-auto mt-4 mb-2" style={{ background: C.border }} />
-  
-  
-  {isDesktop && (
-    <button
-      onClick={() => { setShowBottomSheet(false); setActiveMarker(null); }}
-      className="absolute top-3 right-3 z-10 p-2 rounded-xl"
-      style={{ background: C.background, color: "#9ca3af" }}
-    >
-      <X size={18} />
-    </button>
-  )}
-
-  <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pb-8 pt-3">
-    {/* Header: Estação */}
-    <div className="flex items-start justify-between mb-3">
-      <div className="flex items-center gap-3 min-w-0">
+        {/* ── BOTTOM SHEET ── */}
         <div
-          className="p-2.5 rounded-xl shrink-0"
-          style={{ background: riskBg(getMaxForecastRisk(activeMarker)) }}
-        >
-          <MapPin size={22} style={{ color: riskColor(getMaxForecastRisk(activeMarker)) }} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>Estação</p>
-          <h2 className="text-base font-bold tracking-tight leading-tight" style={{ color: C.textDark }}>
-            {activeMarker?.name}
-          </h2>
-          <div className="flex items-center gap-1 mt-0.5">
-            <MapPin size={11} style={{ color: "#9ca3af" }} />
-            <p className="text-[11px]" style={{ color: "#6b7280" }}>{activeMarker?.city}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Fase Fenológica */}
-    <div
-      className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-4"
-      style={{ background: C.greenUltra, border: `1px solid ${C.greenPale}` }}
-    >
-      <Sprout size={15} style={{ color: C.green }} />
-      <div>
-        <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Fase Fenológica</p>
-        <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>{activeMarker?.fase}</p>
-      </div>
-    </div>
-
-    {/* ── PREVISÃO 5 DIAS ── */}
-<div className="space-y-4">
-
-  {/* Label */}
-  <div className="flex items-center gap-2 px-1">
-    <CloudRain size={13} style={{ color: "#9ca3af" }} />
-    <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#9ca3af" }}>
-      Previsão 5 Dias
-    </p>
-  </div>
-
-  {/* Tira de dias */}
-  <div className="flex gap-2 overflow-x-auto pb-1">
-    {activeMarker?.forecast?.map((f, i) => {
-      const worst =
-        f.sarnaRisk === "Favorável à Doença" || f.galaRisk === "Favorável à Doença"
-          ? "Favorável à Doença"
-          : f.sarnaRisk === "Pouco Favorável" || f.galaRisk === "Pouco Favorável"
-          ? "Pouco Favorável"
-          : "Não Favorável";
-      const sel = selectedForecastDay === i;
-      return (
-        <button
-          key={i}
-          onClick={() => setSelectedForecastDay(i)}
-          className="flex flex-col items-center gap-1 py-2.5 px-3 rounded-xl shrink-0 transition-all"
+          ref={bottomSheetRef}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="absolute z-50 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ease-out overflow-y-auto transition-all duration-300"
           style={{
-            background: sel ? riskBg(worst) : "#f9fafb",
-            border: `2px solid ${sel ? riskBorder(worst) : "#f3f4f6"}`,
-            minWidth: "68px",
+            borderRadius: "1rem",
+            ...(isDesktop
+              ? {
+                top: "0.75rem",
+                left: "50%",
+                transform: showBottomSheet
+                  ? "translateX(-50%) translateY(0) scale(1)"
+                  : "translateX(-50%) translateY(-12px) scale(0.98)",
+                width: "fit-content",
+                minWidth: "420px",
+                maxWidth: "calc(100% - 1.5rem)",
+                maxHeight: "calc(100% - 1.5rem)",
+                opacity: showBottomSheet ? 1 : 0,
+                pointerEvents: showBottomSheet ? "auto" : "none",
+              }
+              : {
+                bottom: "0.5rem",
+                left: "0.5rem",
+                right: "0.5rem",
+                maxHeight: "calc(100% - 1rem)",
+                transform: showBottomSheet
+                  ? "translateY(0)"
+                  : "translateY(calc(100% + 1rem))",
+              }),
+            background: C.white,
           }}
         >
-          <span className="text-[10px] font-black" style={{ color: sel ? riskColor(worst) : "#6b7280" }}>
-            {f.day}
-          </span>
-          <span className="text-[9px]" style={{ color: "#9ca3af" }}>{f.date}</span>
-          <div className="w-2 h-2 rounded-full my-0.5" style={{ background: riskColor(worst) }} />
-          <div className="flex items-center gap-1">
-            <ThermometerSun size={10} style={{ color: "#9ca3af" }} />
-            <span className="text-[10px] font-semibold" style={{ color: C.textDark }}>{f.temp}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <CloudRain size={10} style={{ color: "#9ca3af" }} />
-            <span className="text-[10px] font-semibold" style={{ color: C.textDark }}>{f.rain}</span>
-          </div>
-        </button>
-      );
-    })}
-  </div>
+          {/* Handle mobile (A "barrinha" de puxar) */}
+          <div className="md:hidden w-14 h-1.5 rounded-full mx-auto mt-4 mb-2" style={{ background: C.border }} />
 
-  {/* Detalhe do dia selecionado */}
-  {activeMarker?.forecast?.[selectedForecastDay] && (() => {
-    const f = activeMarker.forecast[selectedForecastDay];
-    const condCols = [
-      { Icon: ThermometerSun, label: "Temperatura", value: f.temp },
-      { Icon: Droplets,       label: "Umidade",     value: f.hum  },
-      { Icon: CloudRain,      label: "Chuva",       value: f.rain },
-    ];
-    return (
-      <div className="space-y-3">
-        {[
-          {
-            name: "Sarna da Maçã",  sci: "Venturia inaequalis", risk: f.sarnaRisk,
-            wetnessThreshold: "9 horas", wetnessNote: "Se o molhamento foliar medido no campo atingir 9 h neste dia, o risco de Sarna se confirma.",
-          },
-          {
-            name: "Mancha de Gala", sci: "Colletotrichum spp.", risk: f.galaRisk,
-            wetnessThreshold: "10 horas", wetnessNote: "Se o molhamento foliar medido no campo atingir 10 h com temperatura acima de 14,9°C, o risco de Mancha de Gala se confirma.",
-          },
-        ].map((d) => (
-          <div
-            key={d.name}
-            className="p-3 rounded-2xl"
-            style={{ border: `1px solid ${riskBorder(d.risk)}`, background: C.white, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
-          >
-            {/* Cabeçalho doença + badge */}
+
+          {isDesktop && (
+            <button
+              onClick={() => { setShowBottomSheet(false); setActiveMarker(null); }}
+              className="absolute top-3 right-3 z-10 p-2 rounded-xl"
+              style={{ background: C.background, color: "#9ca3af" }}
+            >
+              <X size={18} />
+            </button>
+          )}
+
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pb-8 pt-3">
+            {/* Header: Estação */}
             <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-sm font-black leading-tight" style={{ color: C.textDark }}>{d.name}</p>
-                <p className="text-[10px] italic mt-0.5" style={{ color: "#6b7280" }}>{d.sci}</p>
-              </div>
-              <span
-                className="ml-2 shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase text-white"
-                style={{ background: riskColor(d.risk) }}
-              >
-                {d.risk}
-              </span>
-            </div>
-
-            {/* Variáveis previstas (temperatura, umidade, chuva) */}
-            <p className="text-[9px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "#9ca3af" }}>
-              Previsão do dia
-            </p>
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              {condCols.map(({ Icon, label, value }) => (
-                <div key={label} className="flex items-center gap-2 p-2 rounded-xl" style={{ background: "#f9fafb" }}>
-                  <Icon size={13} style={{ color: C.greenMid }} />
-                  <div>
-                    <p className="text-[9px]" style={{ color: "#9ca3af" }}>{label}</p>
-                    <p className="text-xs font-bold" style={{ color: C.textDark }}>{value}</p>
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="p-2.5 rounded-xl shrink-0"
+                  style={{ background: riskBg(getMaxForecastRisk(activeMarker)) }}
+                >
+                  <MapPin size={22} style={{ color: riskColor(getMaxForecastRisk(activeMarker)) }} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>Estação</p>
+                  <h2 className="text-base font-bold tracking-tight leading-tight" style={{ color: C.textDark }}>
+                    {activeMarker?.name}
+                  </h2>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <MapPin size={11} style={{ color: "#9ca3af" }} />
+                    <p className="text-[11px]" style={{ color: "#6b7280" }}>{activeMarker?.city}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Instrução de monitoramento de molhamento foliar */}
-            <div
-              className="flex items-start gap-2.5 p-2.5 rounded-xl"
-              style={{ background: "#fffbeb", border: "1px solid #fde68a" }}
-            >
-              <Wind size={14} className="shrink-0 mt-0.5" style={{ color: "#d97706" }} />
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wide mb-0.5" style={{ color: "#d97706" }}>
-                  Meça o molhamento foliar
-                </p>
-                <p className="text-[11px] leading-relaxed" style={{ color: "#78350f" }}>
-                  {d.wetnessNote}
-                </p>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-    );
-  })()}
-  
 
-</div>
-  </div>
-</div>
+            {/* Fase Fenológica */}
+            <div
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-4"
+              style={{ background: C.greenUltra, border: `1px solid ${C.greenPale}` }}
+            >
+              <Sprout size={15} style={{ color: C.green }} />
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Fase Fenológica</p>
+                <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>{activeMarker?.fase}</p>
+              </div>
+            </div>
+
+            {/* ── PREVISÃO 5 DIAS ── */}
+            <div className="space-y-4">
+
+            
+            
+
+              {/* Tira de dias */}
+              <div className="flex justify-center flex-wrap sm:flex-nowrap gap-2 sm:gap-3 pb-2 w-full">
+                {activeMarker?.forecast?.map((f, i) => {
+                  const sel = selectedForecastDay === i;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedForecastDay(i)}
+                      className="flex-1 flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl shrink-0 transition-all shadow-sm"
+                      style={{
+                        background: sel ? C.white : "#f9fafb",
+                        border: `2px solid ${sel ? C.green : "#f3f4f6"}`,
+                        minWidth: "62px"
+                      }}
+                    >
+                      <span className="text-xs font-black truncate" style={{ color: sel ? C.green : "#6b7280", maxWidth: "100%" }}>
+                        {f.day}
+                      </span>
+                      <span className="text-[10px]" style={{ color: "#9ca3af" }}>{f.date}</span>
+                      <div className="flex flex-col items-center gap-1 mt-1">
+                        <div className="flex items-center gap-1">
+                          <ThermometerSun size={12} style={{ color: "#9ca3af" }} />
+                          <span className="text-[11px] font-bold" style={{ color: C.textDark }}>{f.temp}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <CloudRain size={12} style={{ color: "#9ca3af" }} />
+                          <span className="text-[11px] font-bold" style={{ color: C.textDark }}>{f.rain}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Detalhe do dia selecionado */}
+              {activeMarker?.forecast?.[selectedForecastDay] && (() => {
+                const f = activeMarker.forecast[selectedForecastDay];
+                const tempNum = parseFloat(f.temp);
+                const humNum = parseFloat(f.hum);
+                const hasRain = parseFloat(f.rain) > 0;
+
+                // Calcula risco dinamicamente conforme cenário de molhamento da fazenda
+                const getRisk = (disease, scenario) => {
+                  if (disease === "sarna") {
+                    if (scenario === "wet") {
+                      // Hipótese: molhamento >= 9h na fazenda
+                      // Avalia força de infecção com o mínimo (9h × temp da estação)
+                      // FAVORÁVEL: força >= 140 | NÃO FAVORÁVEL: força < 140 (9h+ mas temp insuficiente)
+                      const force = 9 * tempNum;
+                      if (force >= 140) return "Favorável à Doença";
+                      return "Não Favorável";
+                    }
+                    if (scenario === "dry") {
+                      // Hipótese: molhamento < 9h na fazenda
+                      // POUCO FAVORÁVEL se pmfChuva = 1 (UR > 90% E chuva > 0)
+                      // NÃO FAVORÁVEL se não há chuva ou UR <= 90%
+                      return humNum > 90 && hasRain ? "Pouco Favorável" : "Não Favorável";
+                    }
+                    return f.sarnaRisk;
+                  }
+                  if (disease === "gala") {
+                    if (scenario === "wet") {
+                      // Hipótese: molhamento >= 10h na fazenda
+                      // FAVORÁVEL: temp > 14,9°C | NÃO FAVORÁVEL: temp <= 14,9°C
+                      return tempNum > 14.9 ? "Favorável à Doença" : "Não Favorável";
+                    }
+                    if (scenario === "dry") {
+                      // Hipótese: molhamento < 10h — sempre Não Favorável para Gala
+                      return "Não Favorável";
+                    }
+                    return f.galaRisk;
+                  }
+                };
+
+                const sarnaRisk = getRisk("sarna", farmWetScenario);
+                const galaRisk = getRisk("gala", farmWetScenario);
+
+                const wetnessDisplay =
+                  farmWetScenario === "wet" ? "9h ou mais" : "menos de 9h";
+
+                const condCols = [
+                  { Icon: ThermometerSun, label: "Temperatura", value: f.temp },
+                  { Icon: Droplets, label: "Umidade", value: f.hum },
+                  { Icon: CloudRain, label: "Chuva", value: f.rain },
+                  { Icon: Wind, label: "Molh. Foliar", value: wetnessDisplay },
+                ];
+
+                const diseases = [
+                  {
+                    name: "Sarna da Maçã", sci: "Venturia inaequalis",
+                    risk: sarnaRisk,
+                    note: "Precisa de ao menos 9 horas de folha molhada. Com chuva mas molhamento insuficiente: risco parcial.",
+                  },
+                  {
+                    name: "Mancha de Gala", sci: "Colletotrichum spp.",
+                    risk: galaRisk,
+                    note: "Precisa de 10 horas ou mais de folha molhada E temperatura acima de 14,9°C. Se uma das duas faltar, não há risco.",
+                  },
+                ];
+
+                return (
+                  <div className="space-y-3">
+
+                    {/* Seletor de cenário de molhamento da fazenda */}
+                    <div className="p-3 rounded-2xl" style={{ background: "#f9fafb", border: "1px solid #e5e7eb" }}>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "#9ca3af" }}>
+                        Molhamento foliar na fazenda
+                      </p>
+                      <p className="text-[13px] font-black mb-3 leading-snug" style={{ color: C.textDark }}>
+                        Se na sua fazenda o molhamento foliar for...
+                      </p>
+                      <div className="flex gap-2">
+                        {[
+                          { key: "wet", label: "Maior", sub: "9h ou mais" },
+                          { key: "dry", label: "Menor", sub: "menos de 9h" },
+                        ].map((s) => (
+                          <button
+                            key={s.key}
+                            onClick={() => setFarmWetScenario(s.key)}
+                            className="flex-1 py-2.5 px-3 rounded-xl text-center transition-all"
+                            style={{
+                              background: farmWetScenario === s.key ? C.green : C.white,
+                              color: farmWetScenario === s.key ? "#fff" : "#6b7280",
+                              border: `1.5px solid ${farmWetScenario === s.key ? C.green : "#e5e7eb"}`,
+                            }}
+                          >
+                            <p className="text-[12px] font-black leading-tight">{s.label}</p>
+                            <p className="text-[10px] font-medium mt-0.5 opacity-80">{s.sub}</p>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-2 px-3 py-2 rounded-xl" style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+                        {farmWetScenario === "wet" ? (
+                          <p className="text-[10px] leading-snug" style={{ color: "#1d4ed8" }}>
+                            Sarna ativa com 9h ou mais de folha molhada com chuva. Mancha de Gala ativa com 10h ou mais e temperatura acima de 14,9°C.
+                          </p>
+                        ) : (
+                          <p className="text-[10px] leading-snug" style={{ color: "#1d4ed8" }}>
+                            Molhamento insuficiente para ativar as doenças. Umidade {f.hum}, chuva {f.rain}.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* M\u00e9tricas meteorol\u00f3gicas do dia */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {condCols.map(({ Icon, label, value }) => (
+                        <div key={label} className="flex flex-col items-center gap-1 p-2 rounded-xl" style={{ background: "#f9fafb" }}>
+                          <Icon size={13} style={{ color: C.greenMid }} />
+                          <p className="text-[9px] text-center" style={{ color: "#9ca3af" }}>{label}</p>
+                          <p className="text-xs font-bold" style={{ color: C.textDark }}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Cards de doen\u00e7a com alerta din\u00e2mico */}
+                    {diseases.map((d) => (
+                      <div
+                        key={d.name}
+                        className="p-3 rounded-2xl transition-all"
+                        style={{ border: `1px solid ${riskBorder(d.risk)}`, background: C.white, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="text-sm font-black leading-tight" style={{ color: C.textDark }}>{d.name}</p>
+                            <p className="text-[10px] italic mt-0.5" style={{ color: "#6b7280" }}>{d.sci}</p>
+                          </div>
+                          <span
+                            className="ml-2 shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase text-white transition-all"
+                            style={{ background: riskColor(d.risk) }}
+                          >
+                            {d.risk}
+                          </span>
+                        </div>
+                        <div
+                          className="px-2.5 py-2 rounded-lg"
+                          style={{ background: riskBg(d.risk), border: `1px solid ${riskBorder(d.risk)}` }}
+                        >
+                          <p className="text-[11px] leading-relaxed" style={{ color: "#374151" }}>{d.note}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+
+            </div>
+          </div>
+        </div>
 
         {/* ── FILTER SHEET (mobile) ── */}
         <div
-          className="fixed left-0 right-0 z-20 rounded-t-3xl shadow-[0_-10px_40px_-8px_rgba(0,0,0,0.25)] transition-all duration-500 ease-out md:hidden"
+          className="fixed left-0 right-0 z-50 rounded-t-3xl shadow-[0_-10px_40px_-8px_rgba(0,0,0,0.25)] transition-all duration-500 ease-out md:hidden"
           style={{
             bottom: 0,
             top: "auto",
@@ -1498,7 +1580,7 @@ const App = () => {
                   placeholder: "Fruta",
                   val: selectedCrop,
                   set: setSelectedCrop,
-                  opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                  opts: ["Maçã"],
                   locked: false,
                 },
                 {
@@ -1586,8 +1668,19 @@ const App = () => {
               }}
               disabled={!selectedCrop}
               onClick={() => {
-                setShowFilterSheet(false);
-                setFiltersApplied(true);
+                if (skipPreventionManual) {
+                  setShowFilterSheet(false);
+                  setFiltersApplied(true);
+                } else {
+                  setShowFilterSheet(false);
+                  setPendingFilterApply(true);
+                  if (selectedCrop && PREVENTION_MANUALS[selectedCrop]) {
+                    setSelectedManualCrop(selectedCrop);
+                  } else {
+                    setSelectedManualCrop("");
+                  }
+                  setShowPreventionModal(true);
+                }
               }}
             >
               <Search size={16} /> APLICAR FILTROS
@@ -1597,14 +1690,14 @@ const App = () => {
 
         {/* Floating filter button (mobile only) - Fixed position, hidden until filters applied */}
         {!showFilterSheet && !showBottomSheet && filtersApplied && (
-  <button
-    className="fixed right-4 bottom-6 z-20 md:hidden flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all"
-    style={{ background: C.green, color: C.white }}
-    onClick={() => setShowFilterSheet(true)}
-  >
-    <Search size={16} /> FILTROS
-  </button>
-)}
+          <button
+            className="fixed right-4 bottom-6 z-20 md:hidden flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all"
+            style={{ background: C.green, color: C.white }}
+            onClick={() => setShowFilterSheet(true)}
+          >
+            <Search size={16} /> FILTROS
+          </button>
+        )}
 
         {/* Menu suspenso flutuante — desktop, após filtros aplicados */}
         {filtersApplied && !showBottomSheet && filterLayout !== "sidebar" && (
@@ -1716,171 +1809,224 @@ const App = () => {
               }}
             >
 
-            {/* Painel — bottom sheet mobile / modal desktop */}
-            <div
-              className="absolute z-60 flex flex-col
+              {/* Painel — bottom sheet mobile / modal desktop */}
+              <div
+                className="absolute z-60 flex flex-col
                          left-0 right-0 bottom-0 rounded-t-2xl
                          md:static md:rounded-2xl md:w-full md:max-w-5xl md:max-h-full"
-              style={{
-                background: "#ffffff",
-                maxHeight: "85dvh",
-                boxShadow: "0 -4px 32px rgba(0,0,0,0.18), 0 2px 16px rgba(0,0,0,0.12)",
-              }}
-            >
-              {/* Drag handle mobile */}
-              <div className="md:hidden flex justify-center pt-2.5 pb-0 shrink-0">
-                <div className="w-8 h-0.75 rounded-full" style={{ background: "#d1d5db" }} />
-              </div>
-
-              {/* Cabeçalho do documento */}
-              <div
-                className="px-6 pt-5 pb-4 shrink-0 flex items-start justify-between gap-4"
-                style={{ borderBottom: "2px solid #111c15" }}
+                style={{
+                  background: "#ffffff",
+                  maxHeight: "85dvh",
+                  boxShadow: "0 -4px 32px rgba(0,0,0,0.18), 0 2px 16px rgba(0,0,0,0.12)",
+                }}
               >
-                <div>
-                  <p
-                    className="text-[9px] font-bold uppercase tracking-[0.15em] mb-1"
-                    style={{ color: C.greenMid }}
-                  >
-                    IDR-Paraná · Sistema Alerta Fitossanitário
-                  </p>
-                  <h2
-                    className="text-xl font-black leading-tight tracking-tight"
-                    style={{ color: "#111c15" }}
-                  >
-                    Manual de Prevenção
-                  </h2>
-                  <p className="text-xs mt-0.5" style={{ color: "#6b7280" }}>
-                    Cultura: <span className="font-semibold" style={{ color: "#111c15" }}>Maçã</span>
-                    &ensp;·&ensp;Referência técnica para manejo fitossanitário preventivo
-                  </p>
+                {/* Drag handle mobile */}
+                <div className="md:hidden flex justify-center pt-2.5 pb-0 shrink-0">
+                  <div className="w-8 h-0.75 rounded-full" style={{ background: "#d1d5db" }} />
                 </div>
-                <button
-                  onClick={() => {
-                    setShowPreventionModal(false);
-                    if (pendingFilterApply) { setPendingFilterApply(false); setFiltersApplied(true); }
-                  }}
-                  className="shrink-0 p-1.5 rounded transition-colors hover:bg-gray-100"
-                  style={{ color: "#6b7280" }}
+
+                {/* Cabeçalho do documento */}
+                <div
+                  className="px-6 pt-5 pb-4 shrink-0 flex items-start justify-between gap-4"
+                  style={{ borderBottom: "2px solid #111c15" }}
                 >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Corpo scrollável */}
-              <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
-
-                {/* Introdução */}
-                <p className="text-[13px] leading-relaxed" style={{ color: "#374151" }}>
-                  As doenças fúngicas da maçã se desenvolvem em condições climáticas específicas de temperatura
-                  e molhamento foliar. As medidas a seguir devem ser adotadas de forma preventiva, antes do
-                  estabelecimento das condições favoráveis à infecção.
-                </p>
-
-                {/* Seções por doença */}
-                {PREVENTION_MANUAL.diseases.map((d, di) => (
-                  <div key={d.name}>
-                    {/* Título da seção */}
-                    <div className="flex items-baseline gap-2 mb-3">
-                      <span
-                        className="text-[10px] font-black uppercase tracking-widest"
-                        style={{ color: C.greenMid }}
-                      >
-                        {String(di + 1).padStart(2, "0")}
-                      </span>
-                      <div style={{ borderBottom: `1px solid #e5e7eb`, flex: 1, marginBottom: 2 }} />
-                    </div>
+                  <div>
                     <p
-                      className="text-base font-bold leading-tight mb-0.5"
-                      style={{ color: "#111c15" }}
+                      className="text-[9px] font-bold uppercase tracking-[0.15em] mb-1"
+                      style={{ color: C.greenMid }}
                     >
-                      {d.name}
+                      IDR-Paraná · Sistema Alerta Fitossanitário
                     </p>
-                    <p
-                      className="text-[11px] italic mb-4"
-                      style={{ color: "#9ca3af" }}
-                    >
-                      {d.sci}
-                    </p>
-
-                    {/* Lista de medidas */}
-                    <ol className="space-y-3">
-                      {d.tips.map((tip, i) => (
-                        <li key={i} className="flex items-start gap-3">
-                          <span
-                            className="shrink-0 text-[11px] font-black tabular-nums mt-px"
-                            style={{ color: C.green, minWidth: "1.2rem" }}
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-6">
+                      <div className="flex items-center gap-3">
+                        {selectedManualCrop !== "" && (
+                          <button
+                            onClick={() => setSelectedManualCrop("")}
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            title="Voltar para a seleção de cultura"
                           >
-                            {i + 1}.
+                            {/* Seta para esquerda = ChevronDown com rotate */}
+                            <ChevronDown size={22} className="rotate-90" style={{ color: C.green }} />
+                          </button>
+                        )}
+                        <h2
+                          className="text-xl font-black leading-tight tracking-tight"
+                          style={{ color: "#111c15" }}
+                        >
+                          Manual de Prevenção
+                        </h2>
+                      </div>
+                      {selectedManualCrop !== "" && (
+                        <div className="flex items-center gap-2 pb-0.5">
+                          <span className="text-xs font-semibold" style={{ color: "#6b7280" }}>
+                            Cultura:
                           </span>
-                          <p className="text-[13px] leading-relaxed" style={{ color: "#374151" }}>
-                            {tip}
-                          </p>
-                        </li>
-                      ))}
-                    </ol>
+                          <span className="text-xs font-bold px-2 py-1 bg-gray-100 rounded-md" style={{ color: C.green }}>
+                            {selectedManualCrop}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
-
-                {/* Divisor */}
-                <div style={{ borderTop: "1px solid #e5e7eb" }} />
-
-                {/* Boas práticas gerais */}
-                <div>
-                  <p
-                    className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
-                    style={{ color: "#9ca3af" }}
+                  <button
+                    onClick={() => {
+                      setShowPreventionModal(false);
+                      if (pendingFilterApply) { setPendingFilterApply(false); setFiltersApplied(true); }
+                    }}
+                    className="shrink-0 p-1.5 rounded transition-colors hover:bg-gray-100"
+                    style={{ color: "#6b7280" }}
                   >
-                    Recomendações Gerais
-                  </p>
-                  <ul className="space-y-2.5">
-                    {PREVENTION_MANUAL.general.map((tip, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <span className="shrink-0 mt-1.25 w-1 h-1 rounded-full" style={{ background: "#9ca3af" }} />
-                        <p className="text-[13px] leading-relaxed" style={{ color: "#6b7280" }}>
-                          {tip}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
+                    <X size={18} />
+                  </button>
                 </div>
 
-                <div className="h-1" />
-              </div>
+                {/* Corpo scrollável */}
+                {selectedManualCrop === "" ? (
+                  <div className="overflow-y-auto flex-1 px-6 py-6 pb-12">
+                    <div className="text-center space-y-2 mb-8 mt-2">
+                      <div className="inline-flex justify-center items-center w-14 h-14 rounded-full mb-2" style={{ background: C.greenPale }}>
+                        <BookOpen size={28} style={{ color: C.green }} />
+                      </div>
+                      <h3 className="text-lg font-black text-slate-800">Selecione uma Cultura</h3>
+                      <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                        Escolha uma cultura abaixo para visualizar as diretrizes e boas práticas de manejo fitossanitário preventivo.
+                      </p>
+                    </div>
 
-              {/* Rodapé */}
-              <div
-                className="px-6 py-4 shrink-0 space-y-3"
-                style={{ borderTop: "1px solid #e5e7eb", background: "#fafafa" }}
-              >
-                {/* Checkbox */}
-                <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
-                  <input
-                    type="checkbox"
-                    checked={skipPreventionManual}
-                    onChange={(e) => setSkipPreventionManual(e.target.checked)}
-                    className="w-4 h-4 rounded accent-green-700 cursor-pointer"
-                  />
-                  <span className="text-[12px]" style={{ color: "#6b7280" }}>
-                    Não exibir este manual novamente ao filtrar
-                  </span>
-                </label>
+                    <div className="grid grid-cols-1 gap-4 max-w-sm mx-auto">
+                      {[
+                        { name: "Maçã", desc: "Venturia inaequalis, Colletotrichum spp." }
+                      ].map(f => (
+                        <button
+                          key={f.name}
+                          onClick={() => setSelectedManualCrop(f.name)}
+                          className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border text-center transition-all bg-white border-gray-200 hover:border-green-500 hover:bg-green-50 cursor-pointer"
+                        >
+                          <div>
+                            <h4 className="font-black text-slate-800 text-lg">{f.name}</h4>
+                            <p className="text-xs text-slate-500 font-medium mt-1 leading-tight">{f.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
 
-                {/* Botão */}
-                <button
-                  className="w-full py-2.5 rounded font-bold text-sm text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90 active:opacity-80"
-                  style={{ background: C.green }}
-                  onClick={() => {
-                    setShowPreventionModal(false);
-                    setPendingFilterApply(false);
-                    setFiltersApplied(true);
-                  }}
-                >
-                  <Search size={14} />
-                  Ver Mapa
-                </button>
+                    {/* Introdução */}
+                    <p className="text-[13px] leading-relaxed" style={{ color: "#374151" }}>
+                      As doenças fúngicas da {selectedManualCrop.toLowerCase()} se desenvolvem em condições climáticas específicas. As medidas a seguir devem ser adotadas de forma preventiva, antes do estabelecimento das condições favoráveis à infecção.
+                    </p>
+
+                    {/* Seções por doença */}
+                    {PREVENTION_MANUALS[selectedManualCrop]?.diseases.map((d, di) => (
+                      <div key={d.name}>
+                        {/* Título da seção */}
+                        <div className="flex items-baseline gap-2 mb-3">
+                          <span
+                            className="text-[10px] font-black uppercase tracking-widest"
+                            style={{ color: C.greenMid }}
+                          >
+                            {String(di + 1).padStart(2, "0")}
+                          </span>
+                          <div style={{ borderBottom: `1px solid #e5e7eb`, flex: 1, marginBottom: 2 }} />
+                        </div>
+                        <div style={{ paddingLeft: "4px" }}>
+                          <p
+                            className="text-base font-bold leading-tight mb-1"
+                            style={{ color: d.color }}
+                          >
+                            {d.name}
+                          </p>
+                          <p
+                            className="text-[11px] italic mb-4"
+                            style={{ color: "#9ca3af" }}
+                          >
+                            {d.sci}
+                          </p>
+                        </div>
+
+                        {/* Lista de medidas */}
+                        <ol className="space-y-3">
+                          {d.tips.map((tip, i) => (
+                            <li key={i} className="flex items-start gap-3">
+                              <span
+                                className="shrink-0 text-[11px] font-black tabular-nums mt-px"
+                                style={{ color: C.green, minWidth: "1.2rem" }}
+                              >
+                                {i + 1}.
+                              </span>
+                              <p className="text-[13px] leading-relaxed" style={{ color: "#374151" }}>
+                                {tip}
+                              </p>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    ))}
+
+                    {/* Divisor */}
+                    <div style={{ borderTop: "1px solid #e5e7eb" }} />
+
+                    {/* Boas práticas gerais */}
+                    <div>
+                      <p
+                        className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
+                        style={{ color: "#9ca3af" }}
+                      >
+                        Recomendações Gerais
+                      </p>
+                      <ul className="space-y-2.5">
+                        {PREVENTION_MANUALS[selectedManualCrop]?.general.map((tip, i) => (
+                          <li key={i} className="flex items-start gap-3">
+                            <span className="shrink-0 mt-1.25 w-1 h-1 rounded-full" style={{ background: "#9ca3af" }} />
+                            <p className="text-[13px] leading-relaxed" style={{ color: "#6b7280" }}>
+                              {tip}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="h-1" />
+                  </div>
+                )}
+
+                {/* Rodapé visível apenas se houver filtros aplicados aguardando revisão do app */}
+                {pendingFilterApply && (
+                  <div
+                    className="px-6 py-4 shrink-0 space-y-3"
+                    style={{ borderTop: "1px solid #e5e7eb", background: "#fafafa" }}
+                  >
+                    {/* Checkbox */}
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+                      <input
+                        type="checkbox"
+                        checked={skipPreventionManual}
+                        onChange={(e) => setSkipPreventionManual(e.target.checked)}
+                        className="w-4 h-4 rounded accent-green-700 cursor-pointer"
+                      />
+                      <span className="text-[12px]" style={{ color: "#6b7280" }}>
+                        Não exibir este manual novamente ao filtrar
+                      </span>
+                    </label>
+
+                    {/* Botão */}
+                    <button
+                      className="w-full py-2.5 rounded font-bold text-sm text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90 active:opacity-80"
+                      style={{ background: C.green }}
+                      onClick={() => {
+                        setShowPreventionModal(false);
+                        setPendingFilterApply(false);
+                        setFiltersApplied(true);
+                      }}
+                    >
+                      <Search size={14} />
+                      Ver Mapa
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
             </div>
           </>
         )}

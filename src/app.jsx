@@ -126,7 +126,7 @@ const App = () => {
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
   const [filtersApplied, setFiltersApplied] = useState(false);
-  const [filterLayout, setFilterLayout] = useState("compact"); // "compact" ou "sidebar"
+  const [filterLayout, setFilterLayout] = useState("sidebar"); // "compact" ou "sidebar"
 
   const bottomSheetRef = useRef(null);
   const touchStartY = useRef(null);
@@ -138,7 +138,7 @@ const App = () => {
 
   const handleTouchMove = (e) => {
     if (!touchStartY.current) return;
-    
+
     const currentY = e.touches[0].clientY;
     const diff = currentY - touchStartY.current;
 
@@ -606,7 +606,7 @@ const App = () => {
                   placeholder: "Fruta",
                   val: selectedCrop,
                   set: setSelectedCrop,
-                  opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                  opts: ["Maçã"],
                   locked: false,
                 },
                 {
@@ -654,81 +654,81 @@ const App = () => {
 
               // VERSÃO COMPACT (original)
               // VERSÃO COMPACT (original no header)
-if (filterLayout === "compact") {
-  return (
-    <div className="hidden md:flex items-center justify-center flex-1 min-w-0 py-3">
-      <div className="flex items-center gap-3 w-full max-w-2xl min-w-0">
-        <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1.5 min-w-0">
-          {filters.map((f, i) => (
-            <div key={i} className="relative min-w-0">
-              <f.icon
-                size={13}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{
-                  color: f.locked ? "#c4c4c4" : C.greenMid,
-                }}
-              />
-              <select
-                disabled={f.locked}
-                className="w-full min-w-0 pl-8 pr-6 py-1.5 appearance-none rounded-lg text-xs font-semibold outline-none transition-all truncate"
-                style={{
-                  background: f.locked ? "rgba(255,255,255,0.15)" : C.white,
-                  border: `1px solid ${f.locked ? "rgba(255,255,255,0.2)" : C.border}`,
-                  color: f.val ? C.textDark : "#9ca3af",
-                  cursor: f.locked ? "not-allowed" : "pointer",
-                  opacity: f.locked ? 0.55 : 1,
-                }}
-                value={f.val}
-                onChange={(e) => f.set(e.target.value)}
-              >
-                <option value="">{f.placeholder}</option>
-                {f.opts.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={11}
-                className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{
-                  color: f.locked ? "#c4c4c4" : C.greenMid,
-                }}
-              />
-            </div>
-          ))}
-        </div>
-        
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            className="px-4 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
-            style={{
-              background: selectedCrop ? C.white : "rgba(255,255,255,0.5)",
-              color: selectedCrop ? C.green : "rgba(30,107,69,0.5)",
-              cursor: selectedCrop ? "pointer" : "not-allowed",
-            }}
-            disabled={!selectedCrop}
-            onClick={() => setFiltersApplied(true)}
-          >
-            <Search size={14} /> Filtrar
-          </button>
-          
-          <button
-            onClick={() => setFilterLayout("sidebar")}
-            className="shrink-0 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-all"
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              color: C.white,
-              border: `1px solid rgba(255,255,255,0.3)`,
-            }}
-          >
-            ≡
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+              if (filterLayout === "compact") {
+                return (
+                  <div className="hidden md:flex items-center justify-center flex-1 min-w-0 py-3">
+                    <div className="flex items-center gap-3 w-full max-w-2xl min-w-0">
+                      <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1.5 min-w-0">
+                        {filters.map((f, i) => (
+                          <div key={i} className="relative min-w-0">
+                            <f.icon
+                              size={13}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                              style={{
+                                color: f.locked ? "#c4c4c4" : C.greenMid,
+                              }}
+                            />
+                            <select
+                              disabled={f.locked}
+                              className="w-full min-w-0 pl-8 pr-6 py-1.5 appearance-none rounded-lg text-xs font-semibold outline-none transition-all truncate"
+                              style={{
+                                background: f.locked ? "rgba(255,255,255,0.15)" : C.white,
+                                border: `1px solid ${f.locked ? "rgba(255,255,255,0.2)" : C.border}`,
+                                color: f.val ? C.textDark : "#9ca3af",
+                                cursor: f.locked ? "not-allowed" : "pointer",
+                                opacity: f.locked ? 0.55 : 1,
+                              }}
+                              value={f.val}
+                              onChange={(e) => f.set(e.target.value)}
+                            >
+                              <option value="">{f.placeholder}</option>
+                              {f.opts.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              size={11}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                              style={{
+                                color: f.locked ? "#c4c4c4" : C.greenMid,
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          className="px-4 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+                          style={{
+                            background: selectedCrop ? C.white : "rgba(255,255,255,0.5)",
+                            color: selectedCrop ? C.green : "rgba(30,107,69,0.5)",
+                            cursor: selectedCrop ? "pointer" : "not-allowed",
+                          }}
+                          disabled={!selectedCrop}
+                          onClick={() => setFiltersApplied(true)}
+                        >
+                          <Search size={14} /> Filtrar
+                        </button>
+
+                        <button
+                          onClick={() => setFilterLayout("sidebar")}
+                          className="shrink-0 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-all"
+                          style={{
+                            background: "rgba(255,255,255,0.2)",
+                            color: C.white,
+                            border: `1px solid rgba(255,255,255,0.3)`,
+                          }}
+                        >
+                          ≡
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
             })()}
 
           {/* Spacer quando sem filtros */}
@@ -752,7 +752,7 @@ if (filterLayout === "compact") {
                 placeholder: "Selecione a fruta",
                 val: selectedCrop,
                 set: setSelectedCrop,
-                opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                opts: ["Maçã"],
                 locked: false,
               },
               {
@@ -878,41 +878,24 @@ if (filterLayout === "compact") {
                 </div>
 
                 {/* NOVO BOTÃO DE APLICAR FILTROS NO DESKTOP */}
-      <div className="mt-6">
-        <button
-          className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
-          style={{
-            background: selectedCrop ? C.green : "#9ca3af",
-            color: C.white,
-            cursor: selectedCrop ? "pointer" : "not-allowed",
-          }}
-          disabled={!selectedCrop}
-          onClick={() => {
-            setFiltersApplied(true);
-            setFilterLayout("compact"); // Opcional: Volta pro modo compacto após buscar
-          }}
-        >
-          <Search size={16} /> APLICAR FILTROS
-        </button>
-      </div>
-
-                {/* Status */}
-                <div
-                  className="mt-6 pt-4 text-xs rounded-lg p-3"
-                  style={{
-                    background: C.greenUltra,
-                    border: `1px solid ${C.greenPale}`,
-                    color: C.green,
-                  }}
-                >
-                  <p className="font-semibold mb-1">Filtros Selecionados</p>
-                  <p className="opacity-75">
-                    {selectedCrop ? `${selectedCrop}` : "Selecione uma fruta"}
-                    {selectedPhase ? ` • ${selectedPhase}` : ""}
-                    {selectedDisease ? ` • ${selectedDisease}` : ""}
-                    {selectedCity ? ` • ${selectedCity}` : ""}
-                  </p>
+                <div className="mt-6">
+                  <button
+                    className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
+                    style={{
+                      background: selectedCrop ? C.green : "#9ca3af",
+                      color: C.white,
+                      cursor: selectedCrop ? "pointer" : "not-allowed",
+                    }}
+                    disabled={!selectedCrop}
+                    onClick={() => {
+                      setFiltersApplied(true);
+                    }}
+                  >
+                    <Search size={16} /> APLICAR FILTROS
+                  </button>
                 </div>
+
+            
               </div>
             );
           })()}
@@ -960,7 +943,7 @@ if (filterLayout === "compact") {
                     placeholder: "Fruta",
                     val: selectedCrop,
                     set: setSelectedCrop,
-                    opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                    opts: ["Maçã"],
                     locked: false,
                   },
                   {
@@ -1081,9 +1064,9 @@ if (filterLayout === "compact") {
         {/* Backdrop geral */}
         {(showBottomSheet || showFilterSheet) && (
           <div
-            className="absolute inset-0 z-10 transition-all duration-300"
+            className="absolute inset-0 z-40 transition-all duration-300"
             style={{
-              background: showFilterSheet ? "rgba(0,0,0,0.45)" : "transparent",
+              background: "rgba(0,0,0,0.55)",
             }}
             onClick={() => {
               setShowBottomSheet(false);
@@ -1133,7 +1116,7 @@ if (filterLayout === "compact") {
                       placeholder: "Fruta",
                       val: selectedCrop,
                       set: setSelectedCrop,
-                      opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                      opts: ["Maçã"],
                       locked: false,
                     },
                     {
@@ -1229,209 +1212,209 @@ if (filterLayout === "compact") {
           </div>
         )}
 
-    {/* ── BOTTOM SHEET ── */}
-<div
-  ref={bottomSheetRef}
-  onTouchStart={handleTouchStart}
-  onTouchMove={handleTouchMove}
-  onTouchEnd={handleTouchEnd}
-  className="absolute z-20 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ease-out overflow-y-auto transition-all duration-300"
-  style={{
-    borderRadius: "1rem",
-    ...(isDesktop
-      ? {
-          top: "0.75rem",
-          left: "50%",
-          transform: showBottomSheet
-            ? "translateX(-50%) translateY(0) scale(1)"
-            : "translateX(-50%) translateY(-12px) scale(0.98)",
-          width: "fit-content",
-          minWidth: "420px",
-          maxWidth: "calc(100% - 1.5rem)",
-          maxHeight: "calc(100% - 1.5rem)",
-          opacity: showBottomSheet ? 1 : 0,
-          pointerEvents: showBottomSheet ? "auto" : "none",
-        }
-      : {
-          bottom: "0.5rem",
-          left: "0.5rem",
-          right: "0.5rem",
-          maxHeight: "calc(100% - 1rem)",
-          transform: showBottomSheet
-            ? "translateY(0)"
-            : "translateY(calc(100% + 1rem))",
-        }),
-    background: C.white,
-  }}
->
-  {/* Handle mobile (A "barrinha" de puxar) */}
-  <div className="md:hidden w-14 h-1.5 rounded-full mx-auto mt-4 mb-2" style={{ background: C.border }} />
-  
-  
-  {isDesktop && (
-    <button
-      onClick={() => { setShowBottomSheet(false); setActiveMarker(null); }}
-      className="absolute top-3 right-3 z-10 p-2 rounded-xl"
-      style={{ background: C.background, color: "#9ca3af" }}
-    >
-      <X size={18} />
-    </button>
-  )}
-
-  <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pb-8 pt-3">
-    {/* Header: Estação */}
-    <div className="flex items-start justify-between mb-3">
-      <div className="flex items-center gap-3 min-w-0">
+        {/* ── BOTTOM SHEET ── */}
         <div
-          className="p-2.5 rounded-xl shrink-0"
-          style={{ background: riskBg(getMaxRisk(activeMarker?.station)) }}
-        >
-          <MapPin size={22} style={{ color: riskColor(getMaxRisk(activeMarker?.station)) }} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>Estação</p>
-          <h2 className="text-base font-bold tracking-tight leading-tight" style={{ color: C.textDark }}>
-            {activeMarker?.name}
-          </h2>
-          <div className="flex items-center gap-1 mt-0.5">
-            <MapPin size={11} style={{ color: "#9ca3af" }} />
-            <p className="text-[11px]" style={{ color: "#6b7280" }}>{activeMarker?.city}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Fase Fenológica */}
-    <div
-      className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-4"
-      style={{ background: C.greenUltra, border: `1px solid ${C.greenPale}` }}
-    >
-      <Sprout size={15} style={{ color: C.green }} />
-      <div>
-        <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Fase Fenológica</p>
-        <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>{activeMarker?.fase}</p>
-      </div>
-    </div>
-
-    {/* Listagem de Doenças */}
-<div className="space-y-4">
-  <div className="flex items-center gap-2 px-1">
-    <Bug size={13} style={{ color: "#9ca3af" }} />
-    <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#9ca3af" }}>
-      Monitoramento de Riscos
-    </p>
-  </div>
-
-  {activeMarker?.diseases?.map((d, i) => {
-    const calculated = getCalculatedRisks(activeMarker.station);
-    const displayRisk = d.name === "Sarna da Maçã" ? calculated.sarnaRisk : calculated.galaRisk;
-
-    return (
-      <div
-        key={i}
-        className="p-3 rounded-2xl overflow-hidden relative"
-        style={{
-          background: C.white,
-          border: `1px solid ${riskBorder(displayRisk)}`,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-        }}
-      >
-        {/* Header: Nome da Doença */}
-        <div className="mb-3">
-          <p className="text-base font-black leading-tight" style={{ color: C.textDark }}>{d.name}</p>
-          <p className="text-[11px] italic mt-0.5" style={{ color: "#6b7280" }}>{d.sci}</p>
-        </div>
-
-        {/* BARRA DE DESTAQUE DO RISCO */}
-        <div 
-          className="flex items-center justify-between px-3 py-2.5 rounded-xl mb-4"
-          style={{ 
-            background: riskBg(displayRisk),
-            border: `1px solid ${riskBorder(displayRisk)}`
+          ref={bottomSheetRef}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="absolute z-50 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ease-out overflow-y-auto transition-all duration-300"
+          style={{
+            borderRadius: "1rem",
+            ...(isDesktop
+              ? {
+                top: "0.75rem",
+                left: "50%",
+                transform: showBottomSheet
+                  ? "translateX(-50%) translateY(0) scale(1)"
+                  : "translateX(-50%) translateY(-12px) scale(0.98)",
+                width: "fit-content",
+                minWidth: "420px",
+                maxWidth: "calc(100% - 1.5rem)",
+                maxHeight: "calc(100% - 1.5rem)",
+                opacity: showBottomSheet ? 1 : 0,
+                pointerEvents: showBottomSheet ? "auto" : "none",
+              }
+              : {
+                bottom: "0.5rem",
+                left: "0.5rem",
+                right: "0.5rem",
+                maxHeight: "calc(100% - 1rem)",
+                transform: showBottomSheet
+                  ? "translateY(0)"
+                  : "translateY(calc(100% + 1rem))",
+              }),
+            background: C.white,
           }}
         >
-          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: riskColor(displayRisk) }}>
-            Status de Risco
-          </span>
-          <span
-            className="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide text-white shadow-sm"
-            style={{ background: riskColor(displayRisk) }}
-          >
-            {displayRisk}
-          </span>
-        </div>
+          {/* Handle mobile (A "barrinha" de puxar) */}
+          <div className="md:hidden w-14 h-1.5 rounded-full mx-auto mt-4 mb-2" style={{ background: C.border }} />
 
-        {/* Card: Sobre e Condições */}
-        <div 
-          className="mb-4 p-3 rounded-xl space-y-2.5"
-          style={{ background: "#F8FAFB", border: "1px solid #F1F3F5" }}
-        >
-          <p className="text-[11px] leading-relaxed" style={{ color: "#4B5563" }}>
-            <span className="font-bold text-slate-700 block mb-0.5">Sobre: </span>
-            {d.description}
-          </p>
-          <div className="h-px w-full bg-slate-200 opacity-50 my-2"></div>
-          <p className="text-[11px] leading-relaxed" style={{ color: "#4B5563" }}>
-            <span className="font-bold text-slate-700 block mb-0.5">Condições: </span>
-            {d.conditions}
-          </p>
-        </div>
 
-        {/* Causas do Alerta (Dados integrados) */}
-        <div className="space-y-2.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>
-            Motivo do Alerta
-          </p>
-          <div className="grid grid-cols-1 gap-2">
-            {d.alertCause?.map((ac, j) => {
-              const Icon = ac.label.includes("Umidade") ? Droplets : 
-                           ac.label.includes("Temperatura") ? ThermometerSun : 
-                           ac.label.includes("Chuva") ? CloudRain : Wind;
+          {isDesktop && (
+            <button
+              onClick={() => { setShowBottomSheet(false); setActiveMarker(null); }}
+              className="absolute top-3 right-3 z-10 p-2 rounded-xl"
+              style={{ background: C.background, color: "#9ca3af" }}
+            >
+              <X size={18} />
+            </button>
+          )}
 
-              return (
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pb-8 pt-3">
+            {/* Header: Estação */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div
-                  key={j}
-                  className="flex items-center justify-between p-3 rounded-xl transition-all"
-                  style={{
-                    background: ac.critical ? riskBg(displayRisk) : "#f9fafb",
-                    border: `1px solid ${ac.critical ? riskBorder(displayRisk) : "#f3f4f6"}`,
-                  }}
+                  className="p-2.5 rounded-xl shrink-0"
+                  style={{ background: riskBg(getMaxRisk(activeMarker?.station)) }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="p-2 rounded-lg" 
-                      style={{ 
-                        background: C.white, 
-                        color: ac.critical ? riskColor(displayRisk) : "#9ca3af",
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                      }}
-                    >
-                      <Icon size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold" style={{ color: C.textDark }}>{ac.label}</p>
-                      <p className="text-[10px]" style={{ color: "#9ca3af" }}>{ac.threshold}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p 
-                      className="text-base font-black" 
-                      style={{ color: ac.critical ? riskColor(displayRisk) : C.textDark }}
-                    >
-                      {ac.value}
-                    </p>
+                  <MapPin size={22} style={{ color: riskColor(getMaxRisk(activeMarker?.station)) }} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>Estação</p>
+                  <h2 className="text-base font-bold tracking-tight leading-tight" style={{ color: C.textDark }}>
+                    {activeMarker?.name}
+                  </h2>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <MapPin size={11} style={{ color: "#9ca3af" }} />
+                    <p className="text-[11px]" style={{ color: "#6b7280" }}>{activeMarker?.city}</p>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* Fase Fenológica */}
+            <div
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-4"
+              style={{ background: C.greenUltra, border: `1px solid ${C.greenPale}` }}
+            >
+              <Sprout size={15} style={{ color: C.green }} />
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Fase Fenológica</p>
+                <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>{activeMarker?.fase}</p>
+              </div>
+            </div>
+
+            {/* Listagem de Doenças */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 px-1">
+                <Bug size={13} style={{ color: "#9ca3af" }} />
+                <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#9ca3af" }}>
+                  Monitoramento de Riscos
+                </p>
+              </div>
+
+              {activeMarker?.diseases?.map((d, i) => {
+                const calculated = getCalculatedRisks(activeMarker.station);
+                const displayRisk = d.name === "Sarna da Maçã" ? calculated.sarnaRisk : calculated.galaRisk;
+
+                return (
+                  <div
+                    key={i}
+                    className="p-3 rounded-2xl overflow-hidden relative"
+                    style={{
+                      background: C.white,
+                      border: `1px solid ${riskBorder(displayRisk)}`,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    {/* Header: Nome da Doença */}
+                    <div className="mb-3">
+                      <p className="text-base font-black leading-tight" style={{ color: C.textDark }}>{d.name}</p>
+                      <p className="text-[11px] italic mt-0.5" style={{ color: "#6b7280" }}>{d.sci}</p>
+                    </div>
+
+                    {/* BARRA DE DESTAQUE DO RISCO */}
+                    <div
+                      className="flex items-center justify-between px-3 py-2.5 rounded-xl mb-4"
+                      style={{
+                        background: riskBg(displayRisk),
+                        border: `1px solid ${riskBorder(displayRisk)}`
+                      }}
+                    >
+                      <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: riskColor(displayRisk) }}>
+                        Status de Risco
+                      </span>
+                      <span
+                        className="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide text-white shadow-sm"
+                        style={{ background: riskColor(displayRisk) }}
+                      >
+                        {displayRisk}
+                      </span>
+                    </div>
+
+                    {/* Card: Sobre e Condições */}
+                    <div
+                      className="mb-4 p-3 rounded-xl space-y-2.5"
+                      style={{ background: "#F8FAFB", border: "1px solid #F1F3F5" }}
+                    >
+                      <p className="text-[11px] leading-relaxed" style={{ color: "#4B5563" }}>
+                        <span className="font-bold text-slate-700 block mb-0.5">Sobre: </span>
+                        {d.description}
+                      </p>
+                      <div className="h-px w-full bg-slate-200 opacity-50 my-2"></div>
+                      <p className="text-[11px] leading-relaxed" style={{ color: "#4B5563" }}>
+                        <span className="font-bold text-slate-700 block mb-0.5">Condições: </span>
+                        {d.conditions}
+                      </p>
+                    </div>
+
+                    {/* Causas do Alerta (Dados integrados) */}
+                    <div className="space-y-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>
+                        Motivo do Alerta
+                      </p>
+                      <div className="grid grid-cols-1 gap-2">
+                        {d.alertCause?.map((ac, j) => {
+                          const Icon = ac.label.includes("Umidade") ? Droplets :
+                            ac.label.includes("Temperatura") ? ThermometerSun :
+                              ac.label.includes("Chuva") ? CloudRain : Wind;
+
+                          return (
+                            <div
+                              key={j}
+                              className="flex items-center justify-between p-3 rounded-xl transition-all"
+                              style={{
+                                background: ac.critical ? riskBg(displayRisk) : "#f9fafb",
+                                border: `1px solid ${ac.critical ? riskBorder(displayRisk) : "#f3f4f6"}`,
+                              }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className="p-2 rounded-lg"
+                                  style={{
+                                    background: C.white,
+                                    color: ac.critical ? riskColor(displayRisk) : "#9ca3af",
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                  }}
+                                >
+                                  <Icon size={16} />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-bold" style={{ color: C.textDark }}>{ac.label}</p>
+                                  <p className="text-[10px]" style={{ color: "#9ca3af" }}>{ac.threshold}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p
+                                  className="text-base font-black"
+                                  style={{ color: ac.critical ? riskColor(displayRisk) : C.textDark }}
+                                >
+                                  {ac.value}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
-    );
-  })}
-</div>
-  </div>
-</div>
 
         {/* ── FILTER SHEET (mobile) ── */}
         <div
@@ -1471,7 +1454,7 @@ if (filterLayout === "compact") {
                   placeholder: "Fruta",
                   val: selectedCrop,
                   set: setSelectedCrop,
-                  opts: ["Maçã", "Pêra", "Pêssego", "Uva", "Ameixa"],
+                  opts: ["Maçã"],
                   locked: false,
                 },
                 {
@@ -1570,14 +1553,14 @@ if (filterLayout === "compact") {
 
         {/* Floating filter button (mobile only) - Fixed position, hidden until filters applied */}
         {!showFilterSheet && !showBottomSheet && filtersApplied && (
-  <button
-    className="fixed right-4 bottom-6 z-20 md:hidden flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all"
-    style={{ background: C.green, color: C.white }}
-    onClick={() => setShowFilterSheet(true)}
-  >
-    <Search size={16} /> FILTROS
-  </button>
-)}
+          <button
+            className="fixed right-4 bottom-6 z-20 md:hidden flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all"
+            style={{ background: C.green, color: C.white }}
+            onClick={() => setShowFilterSheet(true)}
+          >
+            <Search size={16} /> FILTROS
+          </button>
+        )}
 
         {/* Map controls */}
         {!showBottomSheet && (
