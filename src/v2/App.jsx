@@ -919,7 +919,6 @@ const App = () => {
                   </button>
                 </div>
 
-               
               </div>
             );
           })()}
@@ -1438,16 +1437,77 @@ const App = () => {
                   { Icon: Wind, label: "Molh. Foliar", value: wetnessDisplay },
                 ];
 
+                const isWet = farmWetScenario === "wet";
+                const sarnaForce = 9 * tempNum;
+
+                // Busca description e conditions do marker
+                const markerDiseaseMap = {};
+                activeMarker.diseases?.forEach((d) => { markerDiseaseMap[d.name] = d; });
+
                 const diseases = [
                   {
                     name: "Sarna da Maçã", sci: "Venturia inaequalis",
                     risk: sarnaRisk,
-                    note: "Precisa de ao menos 9 horas de folha molhada. Com chuva mas molhamento insuficiente: risco parcial.",
+                    description: markerDiseaseMap["Sarna da Maçã"]?.description ?? "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas, reduzindo a qualidade comercial e afetando a produtividade.",
+                    conditions: markerDiseaseMap["Sarna da Maçã"]?.conditions ?? "Requer períodos prolongados de folha molhada com chuva, umidade relativa acima de 90% e temperaturas moderadas.",
+                    alertCause: [
+                      {
+                        label: "Molhamento foliar com chuva",
+                        value: isWet ? "9h ou mais" : "menos de 9h",
+                        threshold: "9h ou mais para ativar",
+                        critical: isWet,
+                      },
+                      {
+                        label: "Temperatura",
+                        value: f.temp,
+                        threshold: "Força = molhamento × temp deve chegar em 140",
+                        critical: isWet && sarnaForce >= 140,
+                      },
+                      {
+                        label: "Umidade relativa",
+                        value: f.hum,
+                        threshold: "Acima de 90% para folha molhada",
+                        critical: humNum > 90,
+                      },
+                      {
+                        label: "Chuva",
+                        value: f.rain,
+                        threshold: "Qualquer chuva ativa o período de molhamento",
+                        critical: hasRain,
+                      },
+                    ],
                   },
                   {
                     name: "Mancha de Gala", sci: "Colletotrichum spp.",
                     risk: galaRisk,
-                    note: "Precisa de 10 horas ou mais de folha molhada E temperatura acima de 14,9°C. Se uma das duas faltar, não há risco.",
+                    description: markerDiseaseMap["Mancha de Gala"]?.description ?? "Doença fúngica que causa lesões necróticas nas folhas, levando ao ressecamento prematuro e desfolha significativa, comprometendo a produção.",
+                    conditions: markerDiseaseMap["Mancha de Gala"]?.conditions ?? "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C e alta umidade relativa.",
+                    alertCause: [
+                      {
+                        label: "Molhamento foliar com chuva",
+                        value: isWet ? "10h ou mais" : "menos de 10h",
+                        threshold: "10h ou mais para ativar",
+                        critical: isWet,
+                      },
+                      {
+                        label: "Temperatura",
+                        value: f.temp,
+                        threshold: "Acima de 14,9°C para ativar",
+                        critical: tempNum > 14.9,
+                      },
+                      {
+                        label: "Umidade relativa",
+                        value: f.hum,
+                        threshold: "Acima de 90% para folha molhada",
+                        critical: humNum > 90,
+                      },
+                      {
+                        label: "Chuva",
+                        value: f.rain,
+                        threshold: "Qualquer chuva ativa o período de molhamento",
+                        critical: hasRain,
+                      },
+                    ],
                   },
                 ];
 
@@ -1482,17 +1542,6 @@ const App = () => {
                           </button>
                         ))}
                       </div>
-                      <div className="mt-2 px-3 py-2 rounded-xl" style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}>
-                        {farmWetScenario === "wet" ? (
-                          <p className="text-[10px] leading-snug" style={{ color: "#1d4ed8" }}>
-                            Sarna ativa com 9h ou mais de folha molhada com chuva. Mancha de Gala ativa com 10h ou mais e temperatura acima de 14,9°C.
-                          </p>
-                        ) : (
-                          <p className="text-[10px] leading-snug" style={{ color: "#1d4ed8" }}>
-                            Molhamento insuficiente para ativar as doenças. Umidade {f.hum}, chuva {f.rain}.
-                          </p>
-                        )}
-                      </div>
                     </div>
 
                     {/* M\u00e9tricas meteorol\u00f3gicas do dia */}
@@ -1506,30 +1555,91 @@ const App = () => {
                       ))}
                     </div>
 
-                    {/* Cards de doen\u00e7a com alerta din\u00e2mico */}
+                    {/* Cards de doença com alerta dinâmico */}
                     {diseases.map((d) => (
                       <div
                         key={d.name}
                         className="p-3 rounded-2xl transition-all"
                         style={{ border: `1px solid ${riskBorder(d.risk)}`, background: C.white, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <p className="text-sm font-black leading-tight" style={{ color: C.textDark }}>{d.name}</p>
-                            <p className="text-[10px] italic mt-0.5" style={{ color: "#6b7280" }}>{d.sci}</p>
-                          </div>
+                        {/* Nome + nome científico */}
+                        <div className="mb-3">
+                          <p className="text-base font-black leading-tight" style={{ color: C.textDark }}>{d.name}</p>
+                          <p className="text-[11px] italic mt-0.5" style={{ color: "#6b7280" }}>{d.sci}</p>
+                        </div>
+
+                        {/* Barra de status de risco */}
+                        <div
+                          className="flex items-center justify-between px-3 py-2.5 rounded-xl mb-4"
+                          style={{ background: riskBg(d.risk), border: `1px solid ${riskBorder(d.risk)}` }}
+                        >
+                          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: riskColor(d.risk) }}>
+                            Status de Risco
+                          </span>
                           <span
-                            className="ml-2 shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase text-white transition-all"
+                            className="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide text-white shadow-sm"
                             style={{ background: riskColor(d.risk) }}
                           >
                             {d.risk}
                           </span>
                         </div>
-                        <div
-                          className="px-2.5 py-2 rounded-lg"
-                          style={{ background: riskBg(d.risk), border: `1px solid ${riskBorder(d.risk)}` }}
-                        >
-                          <p className="text-[11px] leading-relaxed" style={{ color: "#374151" }}>{d.note}</p>
+
+                        {/* Sobre e Condições */}
+                        <div className="mb-4 p-3 rounded-xl space-y-2.5" style={{ background: "#F8FAFB", border: "1px solid #F1F3F5" }}>
+                          <p className="text-[11px] leading-relaxed" style={{ color: "#4B5563" }}>
+                            <span className="font-bold text-slate-700 block mb-0.5">Sobre:</span>
+                            {d.description}
+                          </p>
+                          <div className="h-px w-full bg-slate-200 opacity-50" />
+                          <p className="text-[11px] leading-relaxed" style={{ color: "#4B5563" }}>
+                            <span className="font-bold text-slate-700 block mb-0.5">Condições:</span>
+                            {d.conditions}
+                          </p>
+                        </div>
+
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "#9ca3af" }}>
+                          Motivo do Alerta
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          {d.alertCause.map((ac, j) => {
+                            const Icon =
+                              ac.label.includes("Umidade") ? Droplets :
+                              ac.label.includes("Temperatura") ? ThermometerSun :
+                              ac.label.includes("Chuva") ? CloudRain : Wind;
+                            return (
+                              <div
+                                key={j}
+                                className="flex items-center justify-between px-3 py-2 rounded-xl"
+                                style={{
+                                  background: ac.critical ? riskBg(d.risk) : "#f9fafb",
+                                  border: `1px solid ${ac.critical ? riskBorder(d.risk) : "#f3f4f6"}`,
+                                }}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div
+                                    className="p-1.5 rounded-lg"
+                                    style={{
+                                      background: C.white,
+                                      color: ac.critical ? riskColor(d.risk) : "#9ca3af",
+                                      boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                                    }}
+                                  >
+                                    <Icon size={14} />
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] font-bold" style={{ color: C.textDark }}>{ac.label}</p>
+                                    <p className="text-[9px]" style={{ color: "#9ca3af" }}>{ac.threshold}</p>
+                                  </div>
+                                </div>
+                                <p
+                                  className="text-sm font-black ml-2 shrink-0"
+                                  style={{ color: ac.critical ? riskColor(d.risk) : C.textDark }}
+                                >
+                                  {ac.value}
+                                </p>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
