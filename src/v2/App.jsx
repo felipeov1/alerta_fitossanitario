@@ -174,7 +174,7 @@ const App = () => {
   const [skipPreventionManual, setSkipPreventionManual] = useState(false);
   const [selectedManualCrop, setSelectedManualCrop] = useState("");
   const [showAlertLegend, setShowAlertLegend] = useState(false);
-  const [farmWetScenario, setFarmWetScenario] = useState("wet");
+  const [diseaseWetScenario, setDiseaseWetScenario] = useState({ sarna: "wet", gala: "wet" });
 
   const bottomSheetRef = useRef(null);
   const headerMenuRef = useRef(null);
@@ -1424,21 +1424,19 @@ const App = () => {
                   }
                 };
 
-                const sarnaRisk = getRisk("sarna", farmWetScenario);
-                const galaRisk = getRisk("gala", farmWetScenario);
+                const isSarnaWet = diseaseWetScenario.sarna === "wet";
+                const isGalaWet = diseaseWetScenario.gala === "wet";
 
-                const wetnessDisplay =
-                  farmWetScenario === "wet" ? "9h ou mais" : "menos de 9h";
+                const sarnaRisk = getRisk("sarna", diseaseWetScenario.sarna);
+                const galaRisk = getRisk("gala", diseaseWetScenario.gala);
+
+                const sarnaForce = 9 * tempNum;
 
                 const condCols = [
                   { Icon: ThermometerSun, label: "Temperatura", value: f.temp },
                   { Icon: Droplets, label: "Umidade", value: f.hum },
                   { Icon: CloudRain, label: "Chuva", value: f.rain },
-                  { Icon: Wind, label: "Molh. Foliar", value: wetnessDisplay },
                 ];
-
-                const isWet = farmWetScenario === "wet";
-                const sarnaForce = 9 * tempNum;
 
                 // Busca description e conditions do marker
                 const markerDiseaseMap = {};
@@ -1446,22 +1444,28 @@ const App = () => {
 
                 const diseases = [
                   {
+                    key: "sarna",
                     name: "Sarna da Maçã", sci: "Venturia inaequalis",
                     risk: sarnaRisk,
+                    isWet: isSarnaWet,
+                    wetOptions: [
+                      { key: "wet", label: "Maior", sub: "9h ou mais" },
+                      { key: "dry", label: "Menor", sub: "menos de 9h" },
+                    ],
                     description: markerDiseaseMap["Sarna da Maçã"]?.description ?? "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas, reduzindo a qualidade comercial e afetando a produtividade.",
                     conditions: markerDiseaseMap["Sarna da Maçã"]?.conditions ?? "Requer períodos prolongados de folha molhada com chuva, umidade relativa acima de 90% e temperaturas moderadas.",
                     alertCause: [
                       {
                         label: "Molhamento foliar com chuva",
-                        value: isWet ? "9h ou mais" : "menos de 9h",
+                        value: isSarnaWet ? "9h ou mais" : "menos de 9h",
                         threshold: "9h ou mais para ativar",
-                        critical: isWet,
+                        critical: isSarnaWet,
                       },
                       {
                         label: "Temperatura",
                         value: f.temp,
                         threshold: "Força = molhamento × temp deve chegar em 140",
-                        critical: isWet && sarnaForce >= 140,
+                        critical: isSarnaWet && sarnaForce >= 140,
                       },
                       {
                         label: "Umidade relativa",
@@ -1478,16 +1482,22 @@ const App = () => {
                     ],
                   },
                   {
+                    key: "gala",
                     name: "Mancha de Gala", sci: "Colletotrichum spp.",
                     risk: galaRisk,
+                    isWet: isGalaWet,
+                    wetOptions: [
+                      { key: "wet", label: "Maior", sub: "10h ou mais" },
+                      { key: "dry", label: "Menor", sub: "menos de 10h" },
+                    ],
                     description: markerDiseaseMap["Mancha de Gala"]?.description ?? "Doença fúngica que causa lesões necróticas nas folhas, levando ao ressecamento prematuro e desfolha significativa, comprometendo a produção.",
                     conditions: markerDiseaseMap["Mancha de Gala"]?.conditions ?? "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C e alta umidade relativa.",
                     alertCause: [
                       {
                         label: "Molhamento foliar com chuva",
-                        value: isWet ? "10h ou mais" : "menos de 10h",
+                        value: isGalaWet ? "10h ou mais" : "menos de 10h",
                         threshold: "10h ou mais para ativar",
-                        critical: isWet,
+                        critical: isGalaWet,
                       },
                       {
                         label: "Temperatura",
@@ -1514,38 +1524,8 @@ const App = () => {
                 return (
                   <div className="space-y-3">
 
-                    {/* Seletor de cenário de molhamento da fazenda */}
-                    <div className="p-3 rounded-2xl" style={{ background: "#f9fafb", border: "1px solid #e5e7eb" }}>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "#9ca3af" }}>
-                        Molhamento foliar na fazenda
-                      </p>
-                      <p className="text-[13px] font-black mb-3 leading-snug" style={{ color: C.textDark }}>
-                        Se na sua fazenda o molhamento foliar for...
-                      </p>
-                      <div className="flex gap-2">
-                        {[
-                          { key: "wet", label: "Maior", sub: "9h ou mais" },
-                          { key: "dry", label: "Menor", sub: "menos de 9h" },
-                        ].map((s) => (
-                          <button
-                            key={s.key}
-                            onClick={() => setFarmWetScenario(s.key)}
-                            className="flex-1 py-2.5 px-3 rounded-xl text-center transition-all"
-                            style={{
-                              background: farmWetScenario === s.key ? C.green : C.white,
-                              color: farmWetScenario === s.key ? "#fff" : "#6b7280",
-                              border: `1.5px solid ${farmWetScenario === s.key ? C.green : "#e5e7eb"}`,
-                            }}
-                          >
-                            <p className="text-[12px] font-black leading-tight">{s.label}</p>
-                            <p className="text-[10px] font-medium mt-0.5 opacity-80">{s.sub}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* M\u00e9tricas meteorol\u00f3gicas do dia */}
-                    <div className="grid grid-cols-4 gap-2">
+                    {/* Métricas meteorológicas do dia */}
+                    <div className="grid grid-cols-3 gap-2">
                       {condCols.map(({ Icon, label, value }) => (
                         <div key={label} className="flex flex-col items-center gap-1 p-2 rounded-xl" style={{ background: "#f9fafb" }}>
                           <Icon size={13} style={{ color: C.greenMid }} />
@@ -1559,9 +1539,43 @@ const App = () => {
                     {diseases.map((d) => (
                       <div
                         key={d.name}
-                        className="p-3 rounded-2xl transition-all"
+                        className="rounded-2xl transition-all overflow-hidden"
                         style={{ border: `1px solid ${riskBorder(d.risk)}`, background: C.white, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
                       >
+                        {/* Seletor de molhamento foliar — específico desta doença */}
+                        <div
+                          className="px-3 pt-3 pb-2"
+                          style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}
+                        >
+                          <p className="text-[9px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "#9ca3af" }}>
+                            Molhamento foliar na fazenda
+                          </p>
+                          <div className="flex gap-2">
+                            {d.wetOptions.map((s) => {
+                              const active = diseaseWetScenario[d.key] === s.key;
+                              return (
+                                <button
+                                  key={s.key}
+                                  onClick={() =>
+                                    setDiseaseWetScenario((prev) => ({ ...prev, [d.key]: s.key }))
+                                  }
+                                  className="flex-1 py-2 px-2 rounded-xl text-center transition-all"
+                                  style={{
+                                    background: active ? C.green : C.white,
+                                    color: active ? "#fff" : "#6b7280",
+                                    border: `1.5px solid ${active ? C.green : "#e5e7eb"}`,
+                                  }}
+                                >
+                                  <p className="text-[11px] font-black leading-tight">{s.label}</p>
+                                  <p className="text-[9px] font-medium mt-0.5 opacity-80">{s.sub}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Conteúdo do card */}
+                        <div className="p-3">
                         {/* Nome + nome científico */}
                         <div className="mb-3">
                           <p className="text-base font-black leading-tight" style={{ color: C.textDark }}>{d.name}</p>
@@ -1641,6 +1655,7 @@ const App = () => {
                             );
                           })}
                         </div>
+                        </div> {/* fim conteúdo do card */}
                       </div>
                     ))}
                   </div>
