@@ -601,81 +601,99 @@ const App = () => {
   };
 
   const getMarkerIcon = (m, isActive) => {
+    const worstRisk = (alerts) => {
+      if (alerts.some(d => d.risk === "Favorável à Doença")) return "Favorável à Doença";
+      if (alerts.some(d => d.risk === "Pouco Favorável")) return "Pouco Favorável";
+      return "ok";
+    };
+
     const riskColorCode = (r) =>
-      r === "Favorável à Doença"
-        ? C.red
-        : r === "Pouco Favorável"
-          ? "#ca8a04"
-          : C.greenMid;
+      r === "Favorável à Doença" ? "#ef4444"
+      : r === "Pouco Favorável"   ? "#f59e0b"
+      : "#22c55e";
+
+    const riskBgCode = (r) =>
+      r === "Favorável à Doença" ? "#fff1f2"
+      : r === "Pouco Favorável"   ? "#fffbeb"
+      : "#f0fdf4";
 
     const fruitsToRender = m.fruits || ["🍎"];
-    
+
     const alertsByFruit = {};
-    fruitsToRender.forEach(f => {
-      alertsByFruit[f] = [];
+    fruitsToRender.forEach(f => { alertsByFruit[f] = []; });
+    m.diseases.forEach(d => {
+      const fe = getFruitForDisease(d.name);
+      if (alertsByFruit[fe]) alertsByFruit[fe].push(d);
+      else if (fruitsToRender[0]) alertsByFruit[fruitsToRender[0]].push(d);
     });
 
-    const stationDiseases = m.diseases;
+    const scale = isActive ? 1.2 : 1;
+    const chipSize = Math.round(34 * scale);
+    const emojiSize = Math.round(18 * scale);
+    const dotSize = Math.round(5 * scale);
+    const gap = Math.round(4 * scale);
 
-    stationDiseases.forEach(d => {
-      const fEmoji = getFruitForDisease(d.name);
-      if (alertsByFruit[fEmoji]) {
-        alertsByFruit[fEmoji].push(d);
-      } else {
-        const fallback = fruitsToRender[0];
-        if(fallback) alertsByFruit[fallback].push(d);
-      }
-    });
-
-    const size = isActive ? 48 : 36;
-    const padding = isActive ? 8 : 4;
-    const fontSize = isActive ? 22 : 18;
-
-    const fruitsHtml = fruitsToRender.map(f => {
+    const chipsHtml = fruitsToRender.map(f => {
       const alerts = alertsByFruit[f] || [];
-      const hasFruitAlerts = alerts.length > 0;
-      
-      const stripesHtml = hasFruitAlerts 
-        ? alerts.slice(0, 3).map(d => `<div style="width: 100%; height: 3px; background-color: ${riskColorCode(d.risk)}; border-radius: 1.5px;" title="${d.name}: ${d.risk}"></div>`).join("")
-        : "";
+      const alertsWithRisk = alerts.filter(d => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável");
+      const worst = worstRisk(alertsWithRisk);
+      const borderColor = alertsWithRisk.length > 0 ? riskColorCode(worst) : "#d1fae5";
+      const bgColor = alertsWithRisk.length > 0 ? riskBgCode(worst) : "#f0fdf4";
+
+      const dotsHtml = alertsWithRisk.slice(0, 3).map(d =>
+        `<div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${riskColorCode(d.risk)};flex-shrink:0;" title="${d.name}"></div>`
+      ).join("");
+
+      const dotsRow = alertsWithRisk.length > 0
+        ? `<div style="display:flex;gap:2px;justify-content:center;margin-top:3px;">${dotsHtml}</div>`
+        : `<div style="height:${dotSize + 3}px;"></div>`;
 
       return `
-        <div style="display: flex; flex-direction: column; align-items: center; margin: 0 4px;">
-          <span style="font-size: ${fontSize}px; line-height: 1; z-index: 2;">${f}</span>
-          <div style="display: flex; flex-direction: column; width: 14px; gap: 2px; margin-top: 4px; min-height: 13px; justify-content: flex-start;">
-            ${stripesHtml}
-          </div>
-        </div>
-      `;
+        <div style="display:flex;flex-direction:column;align-items:center;">
+          <div style="
+            width:${chipSize}px;height:${chipSize}px;
+            border-radius:${Math.round(10 * scale)}px;
+            background:${bgColor};
+            border:2px solid ${borderColor};
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 2px 6px rgba(0,0,0,0.12);
+            font-size:${emojiSize}px;line-height:1;
+          ">${f}</div>
+          ${dotsRow}
+        </div>`;
     }).join("");
 
-    const activePulseHtml = isActive 
-      ? `<div style="position:absolute; inset: -4px; border-radius:30px;background:rgba(30,107,69,0.3);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>` 
+    const pulseHtml = isActive
+      ? `<div style="position:absolute;inset:-5px;border-radius:18px;background:rgba(34,197,94,0.2);animation:ping 1.4s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>`
       : "";
 
-    const minWidth = size;
-    const numFruits = fruitsToRender.length;
-    const estWidth = Math.max(minWidth, numFruits * (fontSize + 6) + 16);
+    const innerW = fruitsToRender.length * chipSize + (fruitsToRender.length - 1) * gap + 16;
+    const innerH = chipSize + dotSize + 3 + 8;
 
     const html = `
-      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; position:relative; cursor: pointer; transform: translateY(-4px);">
-        ${activePulseHtml}
-        <div style="background-color: ${C.white}; border: 2px solid ${C.green}; border-radius: 20px; min-width: ${minWidth}px; min-height: ${size}px; padding: ${padding}px 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); position: relative; z-index: 2;">
-          <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center;">
-            ${fruitsHtml}
-          </div>
+      <div style="display:flex;flex-direction:column;align-items:center;position:relative;cursor:pointer;">
+        ${pulseHtml}
+        <div style="
+          background:#ffffff;
+          border:2px solid ${C.green};
+          border-radius:16px;
+          padding:6px 8px;
+          display:flex;align-items:flex-start;
+          gap:${gap}px;
+          box-shadow:0 4px 14px rgba(0,0,0,0.15);
+          position:relative;z-index:2;
+        ">
+          ${chipsHtml}
         </div>
-        <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${C.green}; margin-top: -1px; z-index: 1;"></div>
+        <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid ${C.green};margin-top:-1px;z-index:1;"></div>
       </div>
     `;
-
-
 
     return window.L.divIcon({
       className: "custom-leaflet-marker",
       html,
-      iconSize: [estWidth, size + 12],
-      iconAnchor: [estWidth / 2, size + 12],
+      iconSize: [innerW, innerH + 14],
+      iconAnchor: [innerW / 2, innerH + 14],
     });
   };
 
@@ -1276,8 +1294,7 @@ const App = () => {
                 transform: showBottomSheet
                   ? "translateX(-50%) translateY(0) scale(1)"
                   : "translateX(-50%) translateY(-12px) scale(0.98)",
-                width: "fit-content",
-                minWidth: "420px",
+                width: "480px",
                 maxWidth: "calc(100% - 1.5rem)",
                 height: "85vh",
                 opacity: showBottomSheet ? 1 : 0,
@@ -1379,13 +1396,22 @@ const App = () => {
                 </div>
               )}
 
-              {activeMarker?.diseases
-                ?.filter((d) => {
+              {(() => {
+                const filteredDiseases = activeMarker?.diseases?.filter((d) => {
                   if (!selectedFruitTab || activeMarker.fruits.length === 1) return true;
                   return getFruitForDisease(d.name) === selectedFruitTab;
-                })
-                .map((d, i) => {
-                const calculated = getCalculatedRisks(activeMarker.station);
+                });
+
+                if (!filteredDiseases || filteredDiseases.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center rounded-2xl mt-4" style={{ background: "#F8FAFB", border: "1px dashed #e5e7eb" }}>
+                      <p className="text-sm font-semibold text-slate-500">Nenhum alerta para esta fruta.</p>
+                    </div>
+                  );
+                }
+
+                return filteredDiseases.map((d, i) => {
+                  const calculated = getCalculatedRisks(activeMarker.station);
                 // Preserve mocked risks unless it's the 2 dynamically calculated apple diseases
                 let displayRisk = d.risk;
                 if (d.name === "Sarna da Maçã") displayRisk = calculated.sarnaRisk;
@@ -1493,7 +1519,8 @@ const App = () => {
                     </div>
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
           </div>
         </div>
