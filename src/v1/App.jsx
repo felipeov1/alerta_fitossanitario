@@ -610,18 +610,26 @@ const App = () => {
       ? alertDiseases.map(d => `<div style="flex: 1; background-color: ${riskColorCode(d.risk)};" title="${d.name}: ${d.risk}"></div>`).join("")
       : "";
 
+    const activePulseHtml = isActive 
+      ? `<div style="position:absolute; inset: -4px; border-radius:30px;background:rgba(30,107,69,0.3);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>` 
+      : "";
+
+    const stripesContainerHtml = hasAlerts 
+      ? `
+        <div style="display: flex; width: 100%; height: 6px; position: absolute; bottom: 0; left: 0; z-index: 1;">
+          ${stripesHtml}
+        </div>
+      ` 
+      : "";
+
     const html = `
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; position:relative; cursor: pointer; transform: translateY(-4px);">
-        ${isActive ? `<div style="position:absolute; inset: -4px; border-radius:30px;background:rgba(30,107,69,0.3);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>` : ''}
+        ${activePulseHtml}
         <div style="background-color: ${C.white}; border: 2px solid ${C.green}; border-radius: 20px; min-width: ${minWidth}px; min-height: ${size}px; padding: ${padding}px 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; z-index: 2; padding-bottom: ${hasAlerts ? padding + 6 : padding}px;">
           <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px;">
             ${fruitsHtml}
           </div>
-          ${hasAlerts ? `
-            <div style="display: flex; width: 100%; height: 6px; position: absolute; bottom: 0; left: 0; z-index: 1;">
-              ${stripesHtml}
-            </div>
-          ` : ''}
+          ${stripesContainerHtml}
         </div>
         <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${C.green}; margin-top: -1px; z-index: 1;"></div>
       </div>
