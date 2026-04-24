@@ -116,12 +116,23 @@ const calculateDiseaseRisk = (station) => {
   return { sarnaRisk, galaRisk };
 };
 
+const getFruitForDisease = (dName) => {
+  const n = dName.toLowerCase();
+  if (n.includes("míldio") || n.includes("uva")) return "🍇";
+  if (n.includes("sigatoka") || n.includes("banana")) return "🍌";
+  if (n.includes("ferrugem") || n.includes("pera")) return "🍐";
+  if (n.includes("greening") || n.includes("laranja") || n.includes("pinta")) return "🍊";
+  if (n.includes("abacate")) return "🥑";
+  return "🍎"; // Default to Maçã for Sarna, Gala, Podridão
+};
+
 const App = () => {
   const [selectedCrop, setSelectedCrop] = useState("");
   const [selectedPhase, setSelectedPhase] = useState("");
   const [selectedDisease, setSelectedDisease] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
   const [activeMarker, setActiveMarker] = useState(null);
+  const [selectedFruitTab, setSelectedFruitTab] = useState(null);
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
@@ -585,6 +596,7 @@ const App = () => {
 
   const handleMarkerClick = (marker) => {
     setActiveMarker(marker);
+    setSelectedFruitTab(marker.fruits?.[0] || null);
     setShowBottomSheet(true);
   };
 
@@ -595,16 +607,6 @@ const App = () => {
         : r === "Pouco Favorável"
           ? "#ca8a04"
           : C.greenMid;
-
-    const getFruitForDisease = (dName) => {
-      const n = dName.toLowerCase();
-      if (n.includes("míldio") || n.includes("uva")) return "🍇";
-      if (n.includes("sigatoka") || n.includes("banana")) return "🍌";
-      if (n.includes("ferrugem") || n.includes("pera")) return "🍐";
-      if (n.includes("greening") || n.includes("laranja") || n.includes("pinta")) return "🍊";
-      if (n.includes("abacate")) return "🥑";
-      return "🍎"; // Default to Maçã for Sarna, Gala, Podridão
-    };
 
     const fruitsToRender = m.fruits || ["🍎"];
     
@@ -1277,7 +1279,7 @@ const App = () => {
                 width: "fit-content",
                 minWidth: "420px",
                 maxWidth: "calc(100% - 1.5rem)",
-                maxHeight: "calc(100% - 1.5rem)",
+                height: "85vh",
                 opacity: showBottomSheet ? 1 : 0,
                 pointerEvents: showBottomSheet ? "auto" : "none",
               }
@@ -1285,7 +1287,7 @@ const App = () => {
                 bottom: "0.5rem",
                 left: "0.5rem",
                 right: "0.5rem",
-                maxHeight: "calc(100% - 1rem)",
+                height: "85vh",
                 transform: showBottomSheet
                   ? "translateY(0)"
                   : "translateY(calc(100% + 1rem))",
@@ -1351,9 +1353,43 @@ const App = () => {
                 </p>
               </div>
 
-              {activeMarker?.diseases?.map((d, i) => {
+              {/* Tabs de Frutas */}
+              {activeMarker?.fruits?.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {activeMarker.fruits.map((fruitEmoji, idx) => {
+                    const isSelected = selectedFruitTab === fruitEmoji;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setSelectedFruitTab(fruitEmoji)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all"
+                        style={{
+                          background: isSelected ? C.greenUltra : C.white,
+                          border: `1px solid ${isSelected ? C.greenPale : "#e5e7eb"}`,
+                          boxShadow: isSelected ? "none" : "0 1px 2px rgba(0,0,0,0.05)",
+                        }}
+                      >
+                        <span className="text-sm">{fruitEmoji}</span>
+                        <span className="text-xs font-bold" style={{ color: isSelected ? C.greenMid : "#6b7280" }}>
+                          {fruitEmoji === "🍎" ? "Maçã" : fruitEmoji === "🍇" ? "Uva" : fruitEmoji === "🍌" ? "Banana" : fruitEmoji === "🍐" ? "Pera" : fruitEmoji === "🍊" ? "Laranja" : fruitEmoji === "🥑" ? "Abacate" : "Cultura"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {activeMarker?.diseases
+                ?.filter((d) => {
+                  if (!selectedFruitTab || activeMarker.fruits.length === 1) return true;
+                  return getFruitForDisease(d.name) === selectedFruitTab;
+                })
+                .map((d, i) => {
                 const calculated = getCalculatedRisks(activeMarker.station);
-                const displayRisk = d.name === "Sarna da Maçã" ? calculated.sarnaRisk : calculated.galaRisk;
+                // Preserve mocked risks unless it's the 2 dynamically calculated apple diseases
+                let displayRisk = d.risk;
+                if (d.name === "Sarna da Maçã") displayRisk = calculated.sarnaRisk;
+                if (d.name === "Mancha de Gala") displayRisk = calculated.galaRisk;
 
                 return (
                   <div
