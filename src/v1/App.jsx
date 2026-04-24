@@ -777,7 +777,7 @@ const App = () => {
                   "Frutificação",
                   "Colheita",
                 ],
-                locked: !selectedCrop,
+                locked: false,
               },
               {
                 icon: Bug,
@@ -791,7 +791,7 @@ const App = () => {
                   "Podridão Amarga",
                   "Míldio",
                 ],
-                locked: !selectedCrop,
+                locked: false,
               },
               {
                 icon: MapPin,
@@ -806,7 +806,7 @@ const App = () => {
                   "São Joaquim",
                   "Londrina",
                 ],
-                locked: !selectedCrop,
+                locked: false,
               },
             ];
 
@@ -891,11 +891,10 @@ const App = () => {
                   <button
                     className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
                     style={{
-                      background: selectedCrop ? C.green : "#9ca3af",
+                      background: C.green,
                       color: C.white,
-                      cursor: selectedCrop ? "pointer" : "not-allowed",
+                      cursor: "pointer",
                     }}
-                    disabled={!selectedCrop}
                     onClick={() => {
                       setFiltersApplied(true);
                     }}
@@ -967,7 +966,7 @@ const App = () => {
                       "Frutificação",
                       "Colheita",
                     ],
-                    locked: !selectedCrop,
+                    locked: false,
                   },
                   {
                     icon: Bug,
@@ -980,7 +979,7 @@ const App = () => {
                       "Podridão Amarga",
                       "Míldio",
                     ],
-                    locked: !selectedCrop,
+                    locked: false,
                   },
                   {
                     icon: MapPin,
@@ -994,7 +993,7 @@ const App = () => {
                       "São Joaquim",
                       "Londrina",
                     ],
-                    locked: !selectedCrop,
+                    locked: false,
                   },
                 ].map((f, i) => (
                   <div key={i} className="relative">
@@ -1140,7 +1139,7 @@ const App = () => {
                         "Frutificação",
                         "Colheita",
                       ],
-                      locked: !selectedCrop,
+                      locked: false,
                     },
                     {
                       icon: Bug,
@@ -1153,7 +1152,7 @@ const App = () => {
                         "Podridão Amarga",
                         "Míldio",
                       ],
-                      locked: !selectedCrop,
+                      locked: false,
                     },
                     {
                       icon: MapPin,
@@ -1167,7 +1166,7 @@ const App = () => {
                         "São Joaquim",
                         "Londrina",
                       ],
-                      locked: !selectedCrop,
+                      locked: false,
                     },
                   ].map((f, i) => (
                     <div key={i} className="relative">
@@ -1207,11 +1206,10 @@ const App = () => {
                 <button
                   className="w-full mt-5 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md"
                   style={{
-                    background: selectedCrop ? C.green : "#9ca3af",
+                    background: C.green,
                     color: C.white,
-                    cursor: selectedCrop ? "pointer" : "not-allowed",
+                    cursor: "pointer",
                   }}
-                  disabled={!selectedCrop}
                   onClick={() => setFiltersApplied(true)}
                 >
                   <Search size={16} /> VER MAPA
@@ -1478,7 +1476,7 @@ const App = () => {
                     "Frutificação",
                     "Colheita",
                   ],
-                  locked: !selectedCrop,
+                  locked: false,
                 },
                 {
                   icon: Bug,
@@ -1491,7 +1489,7 @@ const App = () => {
                     "Podridão Amarga",
                     "Míldio",
                   ],
-                  locked: !selectedCrop,
+                  locked: false,
                 },
                 {
                   icon: MapPin,
@@ -1505,7 +1503,7 @@ const App = () => {
                     "São Joaquim",
                     "Londrina",
                   ],
-                  locked: !selectedCrop,
+                  locked: false,
                 },
               ].map((f, i) => (
                 <div key={i} className="relative">
@@ -1545,11 +1543,10 @@ const App = () => {
             <button
               className="w-full mt-5 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md"
               style={{
-                background: selectedCrop ? C.green : "#9ca3af",
+                background: C.green,
                 color: C.white,
-                cursor: selectedCrop ? "pointer" : "not-allowed",
+                cursor: "pointer",
               }}
-              disabled={!selectedCrop}
               onClick={() => {
                 setShowFilterSheet(false);
                 setFiltersApplied(true);
