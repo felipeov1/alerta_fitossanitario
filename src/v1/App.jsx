@@ -255,7 +255,7 @@ const App = () => {
         {
           name: "Mancha de Gala",
           sci: "Colletotrichum spp.",
-          risk: "Favorável à Doença",
+          risk: "Pouco Favorável",
           action: "Atenção para a cultivar Gala, risco de desfolha",
           description:
             "Doença fúngica que causa lesões necróticas nas folhas, levando ao ressecamento prematuro e desfolha significativa, comprometendo a produção.",
@@ -279,6 +279,24 @@ const App = () => {
               value: "92%",
               threshold: "Alerta: acima de 90%",
               critical: true,
+            },
+          ],
+        },
+        {
+          name: "Podridão Amarga",
+          sci: "Glomerella cingulata",
+          risk: "Não Favorável",
+          action: "Sem risco imediato",
+          description:
+            "Doença fúngica que causa manchas escuras e deprimidas nos frutos.",
+          conditions:
+            "Exige temperaturas mais altas (acima de 25°C) e alta umidade.",
+          alertCause: [
+            {
+              label: "Temperatura Média",
+              value: "16.2°C",
+              threshold: "Alerta: acima de 25°C",
+              critical: false,
             },
           ],
         },
@@ -595,9 +613,9 @@ const App = () => {
       alertsByFruit[f] = [];
     });
 
-    const alertDiseases = m.diseases.filter((d) => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável");
+    const stationDiseases = m.diseases;
 
-    alertDiseases.forEach(d => {
+    stationDiseases.forEach(d => {
       const fEmoji = getFruitForDisease(d.name);
       if (alertsByFruit[fEmoji]) {
         alertsByFruit[fEmoji].push(d);
@@ -616,19 +634,15 @@ const App = () => {
       const hasFruitAlerts = alerts.length > 0;
       
       const stripesHtml = hasFruitAlerts 
-        ? alerts.slice(0, 3).map(d => `<div style="flex: 1; background-color: ${riskColorCode(d.risk)};" title="${d.name}: ${d.risk}"></div>`).join("")
+        ? alerts.slice(0, 3).map(d => `<div style="width: 100%; height: 3px; background-color: ${riskColorCode(d.risk)}; border-radius: 1.5px;" title="${d.name}: ${d.risk}"></div>`).join("")
         : "";
 
       return `
-        <div style="display: flex; flex-direction: column; align-items: center; margin: 0 3px;">
+        <div style="display: flex; flex-direction: column; align-items: center; margin: 0 4px;">
           <span style="font-size: ${fontSize}px; line-height: 1; z-index: 2;">${f}</span>
-          ${hasFruitAlerts ? `
-            <div style="display: flex; width: 100%; height: 5px; margin-top: 4px; border-radius: 2px; overflow: hidden;">
-              ${stripesHtml}
-            </div>
-          ` : `
-            <div style="width: 100%; height: 5px; margin-top: 4px;"></div>
-          `}
+          <div style="display: flex; flex-direction: column; width: 14px; gap: 2px; margin-top: 4px; min-height: 13px; justify-content: flex-start;">
+            ${stripesHtml}
+          </div>
         </div>
       `;
     }).join("");
