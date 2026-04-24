@@ -221,6 +221,7 @@ const App = () => {
       diseaseRisk: "Favorável à Doença",
       fase: "Frutificação, frutos com 20 a 30 mm",
       syncAgo: "12 minutos",
+      fruits: ["🍎", "🍇"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -305,6 +306,7 @@ const App = () => {
       diseaseRisk: "Pouco Favorável",
       fase: "Floração plena",
       syncAgo: "8 minutos",
+      fruits: ["🍌", "🍊"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -389,6 +391,7 @@ const App = () => {
       diseaseRisk: "Não Favorável",
       fase: "Brotação, ponteira verde",
       syncAgo: "5 minutos",
+      fruits: ["🍐", "🥑", "🍎"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -470,6 +473,7 @@ const App = () => {
       diseaseRisk: "Favorável à Doença",
       fase: "Frutificação",
       syncAgo: "15 minutos",
+      fruits: ["🍇", "🍐", "🍌"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -511,6 +515,7 @@ const App = () => {
       diseaseRisk: "Favorável à Doença",
       fase: "Floração",
       syncAgo: "2 minutos",
+      fruits: ["🍊", "🥑"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -579,31 +584,57 @@ const App = () => {
           ? "#ca8a04"
           : C.greenMid;
 
-    const cSarna = riskColorCode(sarnaRisk);
-    const cGala = riskColorCode(galaRisk);
+  const getMarkerIcon = (m, isActive) => {
+    const riskColorCode = (r) =>
+      r === "Favorável à Doença"
+        ? C.red
+        : r === "Pouco Favorável"
+          ? "#ca8a04"
+          : C.greenMid;
+
+    const alertDiseases = m.diseases
+      .filter((d) => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável")
+      .slice(0, 3);
+
+    const hasAlerts = alertDiseases.length > 0;
 
     const size = isActive ? 48 : 36;
+    const padding = isActive ? 8 : 4;
     const fontSize = isActive ? 22 : 18;
 
+    const fruitsHtml = (m.fruits || ["🍎"]).map(f => `<span style="font-size: ${fontSize}px; line-height: 1; margin: 0 1px; z-index: 2;">${f}</span>`).join("");
+
+    const minWidth = size;
+
+    const stripesHtml = hasAlerts 
+      ? alertDiseases.map(d => `<div style="flex: 1; background-color: ${riskColorCode(d.risk)};" title="${d.name}: ${d.risk}"></div>`).join("")
+      : "";
+
     const html = `
-      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; position:relative; width: ${size}px; height: ${size + 8}px; cursor: pointer;">
-        ${isActive ? `<div style="position:absolute; width: ${size}px; height: ${size}px; top: 0; left: 0; border-radius:50%;background:rgba(30,107,69,0.3);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>` : ''}
-        <div style="background-color: ${C.white}; border: 2px solid ${C.green}; border-radius: 50%; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; z-index: 2;">
-          <span style="font-size: ${fontSize}px; line-height: 1; margin-bottom: 4px; z-index: 2; margin-top: 2px;">🍎</span>
-          <div style="display: flex; width: 100%; height: 8px; position: absolute; bottom: 0; left: 0; z-index: 1;">
-            <div style="flex: 1; background-color: ${cSarna};" title="Sarna: ${sarnaRisk}"></div>
-            <div style="flex: 1; background-color: ${cGala};" title="Mancha de Gala: ${galaRisk}"></div>
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; position:relative; cursor: pointer; transform: translateY(-4px);">
+        ${isActive ? `<div style="position:absolute; inset: -4px; border-radius:30px;background:rgba(30,107,69,0.3);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>` : ''}
+        <div style="background-color: ${C.white}; border: 2px solid ${C.green}; border-radius: 20px; min-width: ${minWidth}px; min-height: ${size}px; padding: ${padding}px 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; z-index: 2; padding-bottom: ${hasAlerts ? padding + 6 : padding}px;">
+          <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px;">
+            ${fruitsHtml}
           </div>
+          ${hasAlerts ? `
+            <div style="display: flex; width: 100%; height: 6px; position: absolute; bottom: 0; left: 0; z-index: 1;">
+              ${stripesHtml}
+            </div>
+          ` : ''}
         </div>
         <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${C.green}; margin-top: -1px; z-index: 1;"></div>
       </div>
     `;
 
+    const numFruits = (m.fruits || ["🍎"]).length;
+    const estWidth = Math.max(minWidth, numFruits * (fontSize + 4) + 16);
+
     return window.L.divIcon({
       className: "custom-leaflet-marker",
       html,
-      iconSize: [size, size + 8],
-      iconAnchor: [size / 2, size + 8],
+      iconSize: [estWidth, size + 12],
+      iconAnchor: [estWidth / 2, size + 12],
     });
   };
 
@@ -730,7 +761,7 @@ const App = () => {
                 placeholder: "Selecione a fruta",
                 val: selectedCrop,
                 set: setSelectedCrop,
-                opts: ["Maçã"],
+                opts: ["Maçã", "Banana", "Pera", "Uva", "Abacate", "Laranja"],
                 locked: false,
               },
               {
@@ -921,7 +952,7 @@ const App = () => {
                     placeholder: "Fruta",
                     val: selectedCrop,
                     set: setSelectedCrop,
-                    opts: ["Maçã"],
+                    opts: ["Maçã", "Banana", "Pera", "Uva", "Abacate", "Laranja"],
                     locked: false,
                   },
                   {
@@ -1094,7 +1125,7 @@ const App = () => {
                       placeholder: "Fruta",
                       val: selectedCrop,
                       set: setSelectedCrop,
-                      opts: ["Maçã"],
+                      opts: ["Maçã", "Banana", "Pera", "Uva", "Abacate", "Laranja"],
                       locked: false,
                     },
                     {
