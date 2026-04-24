@@ -460,6 +460,88 @@ const App = () => {
         wind: "18 km/h",
       },
     },
+    {
+      id: 4,
+      lat: -27.02,
+      lng: -50.92,
+      name: "Est. Fraiburgo",
+      city: "Fraiburgo",
+      status: "Crítico",
+      diseaseRisk: "Favorável à Doença",
+      fase: "Frutificação",
+      syncAgo: "15 minutos",
+      diseases: [
+        {
+          name: "Sarna da Maçã",
+          sci: "Venturia inaequalis",
+          risk: "Favorável à Doença",
+          action: "Atenção necessária",
+          description: "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas.",
+          conditions: "Requer períodos prolongados de folha molhada com chuva.",
+          alertCause: [
+            { label: "Folha molhada", value: "12 h", threshold: "Alerta: 9 h", critical: true },
+            { label: "Umidade", value: "95%", threshold: "Alerta: 90%", critical: true },
+            { label: "Chuva", value: "15 mm", threshold: "Qualquer chuva ativa o risco", critical: true },
+          ],
+        },
+        {
+          name: "Mancha de Gala",
+          sci: "Colletotrichum spp.",
+          risk: "Pouco Favorável",
+          action: "",
+          description: "Doença fúngica que causa lesões necróticas nas folhas.",
+          conditions: "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C.",
+          alertCause: [
+            { label: "Folha molhada", value: "12 h", threshold: "Alerta: 10 h", critical: true },
+            { label: "Temperatura no período úmido", value: "13.0°C", threshold: "Alerta: acima de 14.9°C", critical: false },
+            { label: "Umidade relativa", value: "95%", threshold: "Alerta: 90%", critical: true },
+          ],
+        }
+      ],
+      codependency: null,
+      station: { temp: "13.0°C", hum: "95%", wetness: "12 h", rain: "15 mm", wind: "12 km/h" }
+    },
+    {
+      id: 5,
+      lat: -28.50,
+      lng: -50.93,
+      name: "Est. Vacaria",
+      city: "Vacaria",
+      status: "Atenção",
+      diseaseRisk: "Favorável à Doença",
+      fase: "Floração",
+      syncAgo: "2 minutos",
+      diseases: [
+        {
+          name: "Sarna da Maçã",
+          sci: "Venturia inaequalis",
+          risk: "Não Favorável",
+          action: "",
+          description: "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas.",
+          conditions: "Requer períodos prolongados de folha molhada com chuva.",
+          alertCause: [
+            { label: "Folha molhada", value: "2 h", threshold: "Alerta: 9 h", critical: false },
+            { label: "Umidade", value: "85%", threshold: "Alerta: 90%", critical: false },
+            { label: "Chuva", value: "2 mm", threshold: "Qualquer chuva ativa o risco", critical: false },
+          ],
+        },
+        {
+          name: "Mancha de Gala",
+          sci: "Colletotrichum spp.",
+          risk: "Favorável à Doença",
+          action: "Risco alto",
+          description: "Doença fúngica que causa lesões necróticas nas folhas.",
+          conditions: "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C.",
+          alertCause: [
+            { label: "Folha molhada", value: "11 h", threshold: "Alerta: 10 h", critical: true },
+            { label: "Temperatura no período úmido", value: "18.0°C", threshold: "Alerta: acima de 14.9°C", critical: true },
+            { label: "Umidade relativa", value: "92%", threshold: "Alerta: 90%", critical: true },
+          ],
+        }
+      ],
+      codependency: null,
+      station: { temp: "18.0°C", hum: "92%", wetness: "11 h", rain: "2 mm", wind: "5 km/h" }
+    },
   ];
 
   const riskColor = (r) =>
@@ -484,6 +566,45 @@ const App = () => {
   const handleMarkerClick = (marker) => {
     setActiveMarker(marker);
     setShowBottomSheet(true);
+  };
+
+  const getMarkerIcon = (m, isActive) => {
+    const sarnaRisk = m.diseases.find((d) => d.name === "Sarna da Maçã")?.risk || "Não Favorável";
+    const galaRisk = m.diseases.find((d) => d.name === "Mancha de Gala")?.risk || "Não Favorável";
+
+    const riskColorCode = (r) =>
+      r === "Favorável à Doença"
+        ? C.red
+        : r === "Pouco Favorável"
+          ? "#ca8a04"
+          : C.greenMid;
+
+    const cSarna = riskColorCode(sarnaRisk);
+    const cGala = riskColorCode(galaRisk);
+
+    const size = isActive ? 48 : 36;
+    const fontSize = isActive ? 22 : 18;
+
+    const html = `
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; position:relative; width: ${size}px; height: ${size + 8}px; cursor: pointer;">
+        ${isActive ? `<div style="position:absolute; width: ${size}px; height: ${size}px; top: 0; left: 0; border-radius:50%;background:rgba(30,107,69,0.3);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>` : ''}
+        <div style="background-color: ${C.white}; border: 2px solid ${C.green}; border-radius: 50%; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; z-index: 2;">
+          <span style="font-size: ${fontSize}px; line-height: 1; margin-bottom: 4px; z-index: 2; margin-top: 2px;">🍎</span>
+          <div style="display: flex; width: 100%; height: 8px; position: absolute; bottom: 0; left: 0; z-index: 1;">
+            <div style="flex: 1; background-color: ${cSarna};" title="Sarna: ${sarnaRisk}"></div>
+            <div style="flex: 1; background-color: ${cGala};" title="Mancha de Gala: ${galaRisk}"></div>
+          </div>
+        </div>
+        <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${C.green}; margin-top: -1px; z-index: 1;"></div>
+      </div>
+    `;
+
+    return window.L.divIcon({
+      className: "custom-leaflet-marker",
+      html,
+      iconSize: [size, size + 8],
+      iconAnchor: [size / 2, size + 8],
+    });
   };
 
   useEffect(() => {
@@ -521,12 +642,7 @@ const App = () => {
     }).addTo(map);
 
     markers.forEach((m) => {
-      const icon = L.divIcon({
-        className: "custom-leaflet-marker",
-        html: `<div style="background-color:${C.white};border:2.5px solid ${C.green};border-radius:50% 50% 50% 0;width:36px;height:36px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(30,107,69,0.35);transform:rotate(-45deg);"><svg style="transform:rotate(45deg)" width="16" height="16" viewBox="0 0 24 24" fill="${C.green}" stroke="none"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3.5" fill="${C.greenPale}"/></svg></div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 36],
-      });
+      const icon = getMarkerIcon(m, false);
       const marker = L.marker([m.lat, m.lng], { icon }).addTo(map);
       marker.on("click", () => handleMarkerClick(m));
       markersRef.current[m.id] = marker;
@@ -551,19 +667,7 @@ const App = () => {
       const marker = markersRef.current[m.id];
       if (!marker) return;
       const isActive = activeMarker?.id === m.id;
-      const icon = L.divIcon({
-        className: "custom-leaflet-marker",
-        html: isActive
-          ? `<div style="position:relative;width:52px;height:52px;display:flex;align-items:center;justify-content:center;">
-               <div style="position:absolute;inset:0;border-radius:50%;background:rgba(30,107,69,0.2);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;"></div>
-               <div style="background-color:${C.green};border:3px solid ${C.white};border-radius:50% 50% 50% 0;width:42px;height:42px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(30,107,69,0.6);transform:rotate(-45deg);">
-                 <svg style="transform:rotate(45deg)" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3.5" fill="${C.greenPale}"/></svg>
-               </div>
-             </div>`
-          : `<div style="background-color:${C.white};border:2.5px solid ${C.green};border-radius:50% 50% 50% 0;width:36px;height:36px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(30,107,69,0.35);transform:rotate(-45deg);"><svg style="transform:rotate(45deg)" width="16" height="16" viewBox="0 0 24 24" fill="${C.green}" stroke="none"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3.5" fill="${C.greenPale}"/></svg></div>`,
-        iconSize: isActive ? [52, 52] : [36, 36],
-        iconAnchor: isActive ? [26, 48] : [18, 36],
-      });
+      const icon = getMarkerIcon(m, isActive);
       marker.setIcon(icon);
     });
   }, [activeMarker, leafletLoaded]);
