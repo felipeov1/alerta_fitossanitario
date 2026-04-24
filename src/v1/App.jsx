@@ -636,9 +636,6 @@ const App = () => {
     const chipsHtml = fruitsToRender.map(f => {
       const alerts = alertsByFruit[f] || [];
       const alertsWithRisk = alerts.filter(d => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável");
-      const worst = worstRisk(alertsWithRisk);
-      const borderColor = alertsWithRisk.length > 0 ? riskColorCode(worst) : "#d1fae5";
-      const bgColor = alertsWithRisk.length > 0 ? riskBgCode(worst) : "#f0fdf4";
 
       const dotsHtml = alertsWithRisk.slice(0, 3).map(d =>
         `<div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${riskColorCode(d.risk)};flex-shrink:0;" title="${d.name}"></div>`
@@ -653,10 +650,10 @@ const App = () => {
           <div style="
             width:${chipSize}px;height:${chipSize}px;
             border-radius:${Math.round(10 * scale)}px;
-            background:${bgColor};
-            border:2px solid ${borderColor};
+            background:#f0fdf4;
+            border:2px solid #d1fae5;
             display:flex;align-items:center;justify-content:center;
-            box-shadow:0 2px 6px rgba(0,0,0,0.12);
+            box-shadow:0 2px 6px rgba(0,0,0,0.10);
             font-size:${emojiSize}px;line-height:1;
           ">${f}</div>
           ${dotsRow}
@@ -762,6 +759,38 @@ const App = () => {
     });
   }, [activeMarker, leafletLoaded]);
 
+  // Map de frutas nome -> emoji
+  const cropToEmoji = {
+    "Maçã": "🍎",
+    "Banana": "🍌",
+    "Pera": "🍐",
+    "Uva": "🍇",
+    "Abacate": "🥑",
+    "Laranja": "🍊",
+  };
+
+  // Atualiza icones quando o filtro de fruta muda
+  useEffect(() => {
+    if (!leafletLoaded || !window.L || !filtersApplied) return;
+    const filterEmoji = cropToEmoji[selectedCrop] || null;
+    markers.forEach((m) => {
+      const marker = markersRef.current[m.id];
+      if (!marker) return;
+      const isActive = activeMarker?.id === m.id;
+      // Se há filtro de fruta, adapta o marcador
+      if (filterEmoji) {
+        const hasFruit = (m.fruits || []).includes(filterEmoji);
+        // Cria versão filtrada do marcador: só mostra a fruta filtrada (ou neutro)
+        const filteredM = hasFruit
+          ? { ...m, fruits: [filterEmoji] }
+          : { ...m, fruits: ["\u{1F4CD}"], diseases: [] }; // pino neutro
+        marker.setIcon(getMarkerIcon(filteredM, isActive));
+      } else {
+        marker.setIcon(getMarkerIcon(m, isActive));
+      }
+    });
+  }, [selectedCrop, activeMarker, leafletLoaded, filtersApplied]);
+
   return (
     <div
       className="flex flex-col h-screen font-sans overflow-hidden"
@@ -835,20 +864,6 @@ const App = () => {
                   "Floração",
                   "Frutificação",
                   "Colheita",
-                ],
-                locked: false,
-              },
-              {
-                icon: Bug,
-                label: "Doença",
-                placeholder: "Selecione a doença",
-                val: selectedDisease,
-                set: setSelectedDisease,
-                opts: [
-                  "Sarna da Maçã",
-                  "Mancha de Gala",
-                  "Podridão Amarga",
-                  "Míldio",
                 ],
                 locked: false,
               },
@@ -1028,19 +1043,6 @@ const App = () => {
                     locked: false,
                   },
                   {
-                    icon: Bug,
-                    placeholder: "Doença",
-                    val: selectedDisease,
-                    set: setSelectedDisease,
-                    opts: [
-                      "Sarna da Maçã",
-                      "Mancha de Gala",
-                      "Podridão Amarga",
-                      "Míldio",
-                    ],
-                    locked: false,
-                  },
-                  {
                     icon: MapPin,
                     placeholder: "Município",
                     val: selectedCity,
@@ -1197,19 +1199,6 @@ const App = () => {
                         "Floração",
                         "Frutificação",
                         "Colheita",
-                      ],
-                      locked: false,
-                    },
-                    {
-                      icon: Bug,
-                      placeholder: "Doença",
-                      val: selectedDisease,
-                      set: setSelectedDisease,
-                      opts: [
-                        "Sarna da Maçã",
-                        "Mancha de Gala",
-                        "Podridão Amarga",
-                        "Míldio",
                       ],
                       locked: false,
                     },
