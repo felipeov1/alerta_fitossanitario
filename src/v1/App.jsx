@@ -574,17 +574,6 @@ const App = () => {
   };
 
   const getMarkerIcon = (m, isActive) => {
-    const sarnaRisk = m.diseases.find((d) => d.name === "Sarna da Maçã")?.risk || "Não Favorável";
-    const galaRisk = m.diseases.find((d) => d.name === "Mancha de Gala")?.risk || "Não Favorável";
-
-    const riskColorCode = (r) =>
-      r === "Favorável à Doença"
-        ? C.red
-        : r === "Pouco Favorável"
-          ? "#ca8a04"
-          : C.greenMid;
-
-  const getMarkerIcon = (m, isActive) => {
     const riskColorCode = (r) =>
       r === "Favorável à Doença"
         ? C.red
