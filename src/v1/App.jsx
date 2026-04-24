@@ -476,11 +476,11 @@ const App = () => {
       fruits: ["🍇", "🍐", "🍌"],
       diseases: [
         {
-          name: "Sarna da Maçã",
-          sci: "Venturia inaequalis",
+          name: "Míldio da Uva",
+          sci: "Plasmopara viticola",
           risk: "Favorável à Doença",
           action: "Atenção necessária",
-          description: "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas.",
+          description: "Doença fúngica severa na videira.",
           conditions: "Requer períodos prolongados de folha molhada com chuva.",
           alertCause: [
             { label: "Folha molhada", value: "12 h", threshold: "Alerta: 9 h", critical: true },
@@ -489,12 +489,12 @@ const App = () => {
           ],
         },
         {
-          name: "Mancha de Gala",
-          sci: "Colletotrichum spp.",
+          name: "Sigatoka Negra",
+          sci: "Mycosphaerella fijiensis",
           risk: "Pouco Favorável",
           action: "",
-          description: "Doença fúngica que causa lesões necróticas nas folhas.",
-          conditions: "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C.",
+          description: "Doença fúngica que causa lesões necróticas nas folhas da bananeira.",
+          conditions: "Desenvolve-se sob molhamento prolongado.",
           alertCause: [
             { label: "Folha molhada", value: "12 h", threshold: "Alerta: 10 h", critical: true },
             { label: "Temperatura no período úmido", value: "13.0°C", threshold: "Alerta: acima de 14.9°C", critical: false },
@@ -518,29 +518,26 @@ const App = () => {
       fruits: ["🍊", "🥑"],
       diseases: [
         {
-          name: "Sarna da Maçã",
-          sci: "Venturia inaequalis",
+          name: "Greening da Laranja",
+          sci: "Candidatus Liberibacter",
           risk: "Não Favorável",
           action: "",
-          description: "Doença fúngica que causa manchas escuras e lesões na superfície dos frutos e folhas.",
-          conditions: "Requer períodos prolongados de folha molhada com chuva.",
+          description: "Doença bacteriana devastadora em citros.",
+          conditions: "Transmitida por psilídeo, favorecida por certas temperaturas.",
           alertCause: [
-            { label: "Folha molhada", value: "2 h", threshold: "Alerta: 9 h", critical: false },
-            { label: "Umidade", value: "85%", threshold: "Alerta: 90%", critical: false },
-            { label: "Chuva", value: "2 mm", threshold: "Qualquer chuva ativa o risco", critical: false },
+            { label: "Temperatura Média", value: "18°C", threshold: "Alerta: 20°C a 25°C", critical: false },
           ],
         },
         {
-          name: "Mancha de Gala",
-          sci: "Colletotrichum spp.",
+          name: "Podridão do Abacate",
+          sci: "Phytophthora cinnamomi",
           risk: "Favorável à Doença",
           action: "Risco alto",
-          description: "Doença fúngica que causa lesões necróticas nas folhas.",
-          conditions: "Desenvolve-se sob molhamento prolongado, temperaturas entre 15-20°C.",
+          description: "Doença que ataca as raízes, causando podridão.",
+          conditions: "Desenvolve-se sob excesso de umidade no solo.",
           alertCause: [
-            { label: "Folha molhada", value: "11 h", threshold: "Alerta: 10 h", critical: true },
-            { label: "Temperatura no período úmido", value: "18.0°C", threshold: "Alerta: acima de 14.9°C", critical: true },
-            { label: "Umidade relativa", value: "92%", threshold: "Alerta: 90%", critical: true },
+            { label: "Chuva acumulada", value: "80 mm", threshold: "Alerta: 50 mm", critical: true },
+            { label: "Umidade do Solo", value: "92%", threshold: "Alerta: 90%", critical: true },
           ],
         }
       ],
@@ -581,51 +578,82 @@ const App = () => {
           ? "#ca8a04"
           : C.greenMid;
 
-    const alertDiseases = m.diseases
-      .filter((d) => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável")
-      .slice(0, 3);
+    const getFruitForDisease = (dName) => {
+      const n = dName.toLowerCase();
+      if (n.includes("míldio") || n.includes("uva")) return "🍇";
+      if (n.includes("sigatoka") || n.includes("banana")) return "🍌";
+      if (n.includes("ferrugem") || n.includes("pera")) return "🍐";
+      if (n.includes("greening") || n.includes("laranja") || n.includes("pinta")) return "🍊";
+      if (n.includes("abacate")) return "🥑";
+      return "🍎"; // Default to Maçã for Sarna, Gala, Podridão
+    };
 
-    const hasAlerts = alertDiseases.length > 0;
+    const fruitsToRender = m.fruits || ["🍎"];
+    
+    const alertsByFruit = {};
+    fruitsToRender.forEach(f => {
+      alertsByFruit[f] = [];
+    });
+
+    const alertDiseases = m.diseases.filter((d) => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável");
+
+    alertDiseases.forEach(d => {
+      const fEmoji = getFruitForDisease(d.name);
+      if (alertsByFruit[fEmoji]) {
+        alertsByFruit[fEmoji].push(d);
+      } else {
+        const fallback = fruitsToRender[0];
+        if(fallback) alertsByFruit[fallback].push(d);
+      }
+    });
 
     const size = isActive ? 48 : 36;
     const padding = isActive ? 8 : 4;
     const fontSize = isActive ? 22 : 18;
 
-    const fruitsHtml = (m.fruits || ["🍎"]).map(f => `<span style="font-size: ${fontSize}px; line-height: 1; margin: 0 1px; z-index: 2;">${f}</span>`).join("");
+    const fruitsHtml = fruitsToRender.map(f => {
+      const alerts = alertsByFruit[f] || [];
+      const hasFruitAlerts = alerts.length > 0;
+      
+      const stripesHtml = hasFruitAlerts 
+        ? alerts.slice(0, 3).map(d => `<div style="flex: 1; background-color: ${riskColorCode(d.risk)};" title="${d.name}: ${d.risk}"></div>`).join("")
+        : "";
 
-    const minWidth = size;
-
-    const stripesHtml = hasAlerts 
-      ? alertDiseases.map(d => `<div style="flex: 1; background-color: ${riskColorCode(d.risk)};" title="${d.name}: ${d.risk}"></div>`).join("")
-      : "";
+      return `
+        <div style="display: flex; flex-direction: column; align-items: center; margin: 0 3px;">
+          <span style="font-size: ${fontSize}px; line-height: 1; z-index: 2;">${f}</span>
+          ${hasFruitAlerts ? `
+            <div style="display: flex; width: 100%; height: 5px; margin-top: 4px; border-radius: 2px; overflow: hidden;">
+              ${stripesHtml}
+            </div>
+          ` : `
+            <div style="width: 100%; height: 5px; margin-top: 4px;"></div>
+          `}
+        </div>
+      `;
+    }).join("");
 
     const activePulseHtml = isActive 
       ? `<div style="position:absolute; inset: -4px; border-radius:30px;background:rgba(30,107,69,0.3);animation:ping 1.2s cubic-bezier(0,0,0.2,1) infinite;z-index:-1;"></div>` 
       : "";
 
-    const stripesContainerHtml = hasAlerts 
-      ? `
-        <div style="display: flex; width: 100%; height: 6px; position: absolute; bottom: 0; left: 0; z-index: 1;">
-          ${stripesHtml}
-        </div>
-      ` 
-      : "";
+    const minWidth = size;
+    const numFruits = fruitsToRender.length;
+    const estWidth = Math.max(minWidth, numFruits * (fontSize + 6) + 16);
 
     const html = `
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; position:relative; cursor: pointer; transform: translateY(-4px);">
         ${activePulseHtml}
-        <div style="background-color: ${C.white}; border: 2px solid ${C.green}; border-radius: 20px; min-width: ${minWidth}px; min-height: ${size}px; padding: ${padding}px 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); overflow: hidden; position: relative; z-index: 2; padding-bottom: ${hasAlerts ? padding + 6 : padding}px;">
-          <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px;">
+        <div style="background-color: ${C.white}; border: 2px solid ${C.green}; border-radius: 20px; min-width: ${minWidth}px; min-height: ${size}px; padding: ${padding}px 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.2); position: relative; z-index: 2;">
+          <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center;">
             ${fruitsHtml}
           </div>
-          ${stripesContainerHtml}
         </div>
         <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${C.green}; margin-top: -1px; z-index: 1;"></div>
       </div>
     `;
 
-    const numFruits = (m.fruits || ["🍎"]).length;
-    const estWidth = Math.max(minWidth, numFruits * (fontSize + 4) + 16);
+
 
     return window.L.divIcon({
       className: "custom-leaflet-marker",
