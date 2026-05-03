@@ -32,88 +32,389 @@ const C = {
   white: "#FFFFFF",
 };
 
-// Cálculos de risco baseado na lógica de Fitopatologia
+const RISK = {
+  low: "Baixo",
+  attention: "Atenção",
+  high: "Alto",
+  veryHigh: "Muito alto",
+};
+
+const RISK_ORDER = {
+  [RISK.low]: 1,
+  [RISK.attention]: 2,
+  [RISK.high]: 3,
+  [RISK.veryHigh]: 4,
+};
+
+const RISK_MESSAGES = {
+  [RISK.low]:
+    "As condições meteorológicas da área da estação indicam baixa favorabilidade climática para esta doença nesta fase fenológica.",
+  [RISK.attention]:
+    "Algumas condições meteorológicas da área da estação podem favorecer esta doença. Acompanhe as próximas atualizações.",
+  [RISK.high]:
+    "As condições meteorológicas da área da estação indicam ambiente favorável para esta doença nesta fase fenológica.",
+  [RISK.veryHigh]:
+    "As condições meteorológicas da área da estação indicam ambiente muito favorável, com combinação de umidade, chuva e temperatura adequada por período prolongado.",
+};
+
+const STANDARD_DISCLAIMER =
+  "Este alerta é baseado em dados meteorológicos e indica apenas favorabilidade climática. Verifique com seu agrônomo quais ações podem ser tomadas.";
+
+const DISEASE_PHASES = {
+  "Sarna da Maçã": ["Brotação", "Floração", "Início de frutificação"],
+  "Mancha de Gala": ["Frutificação", "Maturação"],
+  "Podridão Amarga": ["Frutificação", "Maturação", "Pós-colheita"],
+};
+
+const normalizeRisk = (risk) => {
+  if (!risk) return RISK.low;
+  if (RISK_ORDER[risk]) return risk;
+  if (risk === "Favorável à Doença") return RISK.high;
+  if (risk === "Pouco Favorável") return RISK.attention;
+  if (risk === "Crítico") return RISK.veryHigh;
+  return RISK.low;
+};
+
+const toNumber = (value, fallback = 0) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "string") {
+    const normalized = value.replace(",", ".");
+    const match = normalized.match(/-?\d+(\.\d+)?/);
+    return match ? Number(match[0]) : fallback;
+  }
+  return fallback;
+};
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const sum = (items, getter) => items.reduce((total, item) => total + getter(item), 0);
+const avg = (items, getter) => {
+  const values = items.map(getter).filter((value) => Number.isFinite(value));
+  return values.length ? sum(values, (value) => value) / values.length : 0;
+};
+
+const formatNumber = (value, digits = 1) => {
+  if (!Number.isFinite(value)) return "0";
+  return value.toLocaleString("pt-BR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+};
+
+const buildFallbackInmetHourly = (station) => {
+  const tempBase = toNumber(station?.temp_med ?? station?.temp, 16);
+  const humBase = toNumber(station?.umid_rel ?? station?.hum, 75);
+  const rainTotal = toNumber(station?.precipitacao ?? station?.rain, 0);
+  const windBase = toNumber(station?.vento_vel ?? station?.wind, 6);
+  const wetnessHint = toNumber(station?.wetness, rainTotal > 0 ? Math.min(12, rainTotal) : 0);
+  const wetHours = Math.min(72, Math.max(0, Math.round(wetnessHint)));
+  const rainHours = rainTotal > 0 ? Math.max(1, Math.min(24, Math.ceil(rainTotal / 3))) : 0;
+
+  return Array.from({ length: 72 }, (_, index) => {
+    const hourOfDay = index % 24;
+    const hoursAgo = 71 - index;
+    const isNight = hourOfDay < 7 || hourOfDay > 18;
+    const isWetWindow = hoursAgo < wetHours;
+    const isRainWindow = rainTotal > 0 && hoursAgo < rainHours;
+    const tempCurve = isNight ? -1.2 : hourOfDay < 13 ? 0.3 : 1.4;
+    const radiation = isNight ? 0 : isRainWindow || isWetWindow ? 120 : 620;
+    const humidity = isWetWindow
+      ? Math.max(humBase, 91)
+      : isNight
+        ? clamp(humBase + 8, 60, 98)
+        : clamp(humBase - 12, 45, 88);
+
+    return {
+      horario: `${String(hourOfDay).padStart(2, "0")}:00`,
+      temp_med: Number((tempBase + tempCurve).toFixed(1)),
+      temp_max: Number((tempBase + tempCurve + 0.8).toFixed(1)),
+      temp_min: Number((tempBase + tempCurve - 0.8).toFixed(1)),
+      umid_rel: Math.round(humidity),
+      precipitacao: isRainWindow ? Number((rainTotal / rainHours).toFixed(1)) : 0,
+      press_med: station?.press_med ?? 1013,
+      vento_vel: Number((windBase + (isNight ? -1 : 1)).toFixed(1)),
+      vento_dir: station?.vento_dir ?? 180,
+      raj_vel: Number((windBase * 1.6).toFixed(1)),
+      rad_sol_global: radiation,
+    };
+  });
+};
+
+const getInmetHourly = (station) => {
+  if (station?.inmetHourly?.length) return station.inmetHourly;
+  return buildFallbackInmetHourly(station);
+};
+
+const hourLabel = (row, index) =>
+  row.horario || row.hour || row.data_hora || `${String(index % 24).padStart(2, "0")}:00`;
+
+const estimateLeafWetness = (rows) => {
+  let current = null;
+  let best = { hours: 0, tempSum: 0, start: "", end: "" };
+  let residualDryingHours = 0;
+
+  rows.forEach((row, index) => {
+    const rain = toNumber(row.precipitacao) > 0;
+    const humidity = toNumber(row.umid_rel);
+    const wind = toNumber(row.vento_vel);
+    const radiation = toNumber(row.rad_sol_global);
+    const humidWet = humidity >= 90;
+    const dewWet = humidity >= 95 && radiation <= 80 && wind <= 8;
+    const slowDrying = residualDryingHours > 0 && humidity >= 85 && radiation < 260 && wind <= 12;
+    const wet = rain || humidWet || dewWet || slowDrying;
+
+    if (rain) residualDryingHours = 2;
+    else if (humidWet || dewWet) residualDryingHours = Math.max(residualDryingHours, 1);
+    else if (residualDryingHours > 0) residualDryingHours -= 1;
+
+    if (wet) {
+      if (!current) {
+        current = { hours: 0, tempSum: 0, start: hourLabel(row, index), end: hourLabel(row, index) };
+      }
+      current.hours += 1;
+      current.tempSum += toNumber(row.temp_med);
+      current.end = hourLabel(row, index);
+      if (current.hours > best.hours) best = { ...current };
+    } else {
+      current = null;
+    }
+  });
+
+  return {
+    hours: best.hours,
+    tempAvg: best.hours ? best.tempSum / best.hours : 0,
+    window: best.hours ? `${best.start} - ${best.end}` : "Sem janela contínua",
+  };
+};
+
+const summarizeStationWeather = (station) => {
+  const rows = getInmetHourly(station);
+  const last24 = rows.slice(-24);
+  const last48 = rows.slice(-48);
+  const last72 = rows.slice(-72);
+  const wetness = estimateLeafWetness(last72);
+  const dayBlocks = [rows.slice(-24), rows.slice(-48, -24), rows.slice(-72, -48)].filter(
+    (block) => block.length,
+  );
+  const persistenceDays = dayBlocks.filter((block) => {
+    const wet = estimateLeafWetness(block);
+    const rain = sum(block, (row) => toNumber(row.precipitacao));
+    return wet.hours >= 6 || rain >= 5;
+  }).length;
+
+  return {
+    source: station?.source || "INMET horário",
+    rows,
+    rain24: sum(last24, (row) => toNumber(row.precipitacao)),
+    rain48: sum(last48, (row) => toNumber(row.precipitacao)),
+    rain72: sum(last72, (row) => toNumber(row.precipitacao)),
+    highHumidityHours: last24.filter((row) => toNumber(row.umid_rel) >= 90).length,
+    wetnessHours: wetness.hours,
+    wetTempAvg: wetness.tempAvg,
+    wetWindow: wetness.window,
+    tempAvg24: avg(last24, (row) => toNumber(row.temp_med)),
+    windAvg24: avg(last24, (row) => toNumber(row.vento_vel)),
+    radiationAvg24: avg(last24, (row) => toNumber(row.rad_sol_global)),
+    persistenceDays,
+  };
+};
+
+const buildAlertCause = (label, value, threshold, critical) => ({
+  label,
+  value,
+  threshold,
+  critical,
+});
+
+const buildDiseaseReasons = (diseaseKey, indicators) => {
+  const wetnessLabel = `${formatNumber(indicators.wetnessHours, 0)} h`;
+  const tempWetLabel = `${formatNumber(indicators.wetTempAvg)}°C`;
+
+  if (diseaseKey === "sarna") {
+    const infectionForce = indicators.wetnessHours * indicators.wetTempAvg;
+    return [
+      buildAlertCause(
+        "Molhamento foliar estimado",
+        wetnessLabel,
+        "Sarna: 9 h ou mais",
+        indicators.wetnessHours >= 9,
+      ),
+      buildAlertCause(
+        "Força de infecção estimada",
+        formatNumber(infectionForce, 0),
+        "Molhamento × temperatura >= 140",
+        infectionForce >= 140,
+      ),
+      buildAlertCause(
+        "Temperatura no período úmido",
+        tempWetLabel,
+        "Faixa favorável: 10°C a 24°C",
+        indicators.wetTempAvg >= 10 && indicators.wetTempAvg <= 24,
+      ),
+      buildAlertCause(
+        "Chuva acumulada em 24 h",
+        `${formatNumber(indicators.rain24)} mm`,
+        "Chuva inicia/dispersa o período úmido",
+        indicators.rain24 > 0,
+      ),
+    ];
+  }
+
+  if (diseaseKey === "gala") {
+    return [
+      buildAlertCause(
+        "Molhamento foliar estimado",
+        wetnessLabel,
+        "Mancha de Gala: 10 h ou mais",
+        indicators.wetnessHours >= 10,
+      ),
+      buildAlertCause(
+        "Temperatura no período úmido",
+        tempWetLabel,
+        "Acima de 14,9°C",
+        indicators.wetTempAvg > 14.9,
+      ),
+      buildAlertCause(
+        "Horas com UR alta",
+        `${indicators.highHumidityHours} h`,
+        "UR >= 90% reforça molhamento",
+        indicators.highHumidityHours >= 6,
+      ),
+      buildAlertCause(
+        "Chuva acumulada em 24 h",
+        `${formatNumber(indicators.rain24)} mm`,
+        "Chuva favorece molhamento e dispersão",
+        indicators.rain24 > 0,
+      ),
+    ];
+  }
+
+  return [
+    buildAlertCause(
+      "Chuva acumulada em 48 h",
+      `${formatNumber(indicators.rain48)} mm`,
+      "Água livre aumenta favorabilidade",
+      indicators.rain48 >= 10,
+    ),
+    buildAlertCause(
+      "Umidade relativa alta",
+      `${indicators.highHumidityHours} h`,
+      "UR >= 90%",
+      indicators.highHumidityHours >= 6,
+    ),
+    buildAlertCause(
+      "Temperatura média em 24 h",
+      `${formatNumber(indicators.tempAvg24)}°C`,
+      "Faixa quente aumenta atenção",
+      indicators.tempAvg24 >= 20,
+    ),
+  ];
+};
+
+// Cálculos de favorabilidade climática por área de estação.
 const calculateDiseaseRisk = (station) => {
   if (!station) {
-    return { sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" };
+    return {
+      sarnaRisk: RISK.low,
+      galaRisk: RISK.low,
+      podridaoRisk: RISK.low,
+      indicators: summarizeStationWeather(null),
+      reasons: {},
+    };
   }
 
-  // Mapeia os nomes corretos das propriedades
-  const ur = station.hum;
-  const chuva = station.rain;
-  const tmed = station.temp;
+  const indicators = summarizeStationWeather(station);
+  const infectionForce = indicators.wetnessHours * indicators.wetTempAvg;
+  const sarnaTempOk = indicators.wetTempAvg >= 10 && indicators.wetTempAvg <= 24;
+  const galaTempOk = indicators.wetTempAvg > 14.9;
 
-  // Validações
-  if (ur === undefined || chuva === undefined || tmed === undefined) {
-    return { sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" };
+  let sarnaRisk = RISK.low;
+  if (
+    indicators.wetnessHours >= 14 &&
+    infectionForce >= 220 &&
+    sarnaTempOk &&
+    indicators.rain24 >= 8
+  ) {
+    sarnaRisk = RISK.veryHigh;
+  } else if (indicators.wetnessHours >= 9 && infectionForce >= 140 && sarnaTempOk) {
+    sarnaRisk = RISK.high;
+  } else if (
+    (indicators.wetnessHours >= 4 && sarnaTempOk) ||
+    (indicators.rain24 > 0 && indicators.highHumidityHours >= 3)
+  ) {
+    sarnaRisk = RISK.attention;
   }
 
-  // Extrai números das strings (ex: "92%" -> 92, "38 mm" -> 38, "16.2°C" -> 16.2)
-  const urValue =
-    typeof ur === "string" ? parseFloat(ur.match(/\d+\.?\d*/)?.[0] || 0) : ur;
-  const chuvaValue =
-    typeof chuva === "string"
-      ? parseFloat(chuva.match(/\d+\.?\d*/)?.[0] || 0)
-      : chuva;
-  const tmedValue =
-    typeof tmed === "string"
-      ? parseFloat(tmed.match(/\d+(?:\.\d+)?/)?.[0] || 0)
-      : tmed;
-
-  console.log("Station calc:", {
-    ur,
-    chuva,
-    tmed,
-    urValue,
-    chuvaValue,
-    tmedValue,
-  });
-
-  // PMF (Período de Molhamento Foliar): 1 se UR > 90%, senão 0
-  const pmf = urValue > 90 ? 1 : 0;
-
-  // PMF com Chuva: 1 se teve molhamento E chuva
-  const pmfChuva = pmf === 1 && chuvaValue > 0 ? 1 : 0;
-
-  // PMF em Horas (simulado com base em chuva e umidade)
-  // Se houve chuva com UR alta, acumula horas (cada mm de chuva = ~1h de molhamento)
-  const pmfHs = pmfChuva > 0 ? chuvaValue : 0;
-
-  // Temperatura média acumulada durante molhamento
-  const tmedAc = pmfChuva > 0 ? tmedValue : 0;
-
-  console.log("Calculations:", {
-    pmf,
-    pmfChuva,
-    pmfHs,
-    tmedAc,
-    product: pmfHs * tmedAc,
-  });
-
-  // SARNA: Precisa pmfChuva E horas E temperatura
-  let sarnaRisk = "Não Favorável";
-  if (pmfChuva < 1) {
-    sarnaRisk = "Não Favorável";
-  } else if (pmfHs < 9) {
-    sarnaRisk = "Pouco Favorável";
-  } else if (pmfHs < 900) {
-    // Verifica se (pmfHs × tmedAc) >= 140
-    if (pmfHs * tmedAc >= 140) {
-      sarnaRisk = "Favorável à Doença";
-    } else {
-      sarnaRisk = "Pouco Favorável";
-    }
+  let galaRisk = RISK.low;
+  if (
+    indicators.wetnessHours >= 14 &&
+    galaTempOk &&
+    indicators.rain24 >= 8 &&
+    indicators.highHumidityHours >= 8
+  ) {
+    galaRisk = RISK.veryHigh;
+  } else if (indicators.wetnessHours >= 10 && galaTempOk) {
+    galaRisk = RISK.high;
+  } else if (
+    (indicators.wetnessHours >= 6 && galaTempOk) ||
+    (indicators.rain24 > 0 && indicators.highHumidityHours >= 4)
+  ) {
+    galaRisk = RISK.attention;
   }
 
-  console.log("Disease Risk:", { sarnaRisk });
-
-  // MANCHA DE GALA: Precisa de pmfHs >= 10 E tmedAc > 14.9
-  let galaRisk = "Não Favorável";
-  if (pmfHs >= 10 && tmedAc > 14.9) {
-    galaRisk = "Favorável à Doença";
+  let podridaoRisk = RISK.low;
+  if (indicators.rain48 >= 30 && indicators.tempAvg24 >= 24 && indicators.highHumidityHours >= 8) {
+    podridaoRisk = RISK.veryHigh;
+  } else if (indicators.rain48 >= 15 && indicators.tempAvg24 >= 22) {
+    podridaoRisk = RISK.high;
+  } else if (indicators.rain24 > 0 && indicators.tempAvg24 >= 20) {
+    podridaoRisk = RISK.attention;
   }
 
-  return { sarnaRisk, galaRisk };
+  return {
+    sarnaRisk,
+    galaRisk,
+    podridaoRisk,
+    indicators,
+    reasons: {
+      "Sarna da Maçã": buildDiseaseReasons("sarna", indicators),
+      "Mancha de Gala": buildDiseaseReasons("gala", indicators),
+      "Podridão Amarga": buildDiseaseReasons("podridao", indicators),
+    },
+  };
+};
+
+const getDiseaseAssessment = (station, disease) => {
+  const calculated = calculateDiseaseRisk(station);
+  const name = disease?.name || "";
+  const normalizedRisk = normalizeRisk(disease?.risk);
+
+  if (name === "Sarna da Maçã") {
+    return {
+      risk: calculated.sarnaRisk,
+      alertCause: calculated.reasons[name],
+      phases: DISEASE_PHASES[name],
+    };
+  }
+  if (name === "Mancha de Gala") {
+    return {
+      risk: calculated.galaRisk,
+      alertCause: calculated.reasons[name],
+      phases: DISEASE_PHASES[name],
+    };
+  }
+  if (name === "Podridão Amarga") {
+    return {
+      risk: calculated.podridaoRisk,
+      alertCause: calculated.reasons[name],
+      phases: DISEASE_PHASES[name],
+    };
+  }
+
+  return {
+    risk: normalizedRisk,
+    alertCause: disease?.alertCause || [],
+    phases: DISEASE_PHASES[name] || [],
+  };
 };
 
 const getFruitForDisease = (dName) => {
@@ -203,22 +504,16 @@ const App = () => {
 
   // Calcula o risco máximo da estação (o mais grave entre as doenças)
   const getMaxRisk = (station) => {
-    if (!station) return "Não Favorável";
+    if (!station) return RISK.low;
 
     const risks = calculateDiseaseRisk(station);
-    const riskOrder = {
-      "Favorável à Doença": 3,
-      "Pouco Favorável": 2,
-      "Não Favorável": 1,
-    };
-    const maxRisk = Math.max(
-      riskOrder[risks.sarnaRisk] || 0,
-      riskOrder[risks.galaRisk] || 0,
+    return [risks.sarnaRisk, risks.galaRisk, risks.podridaoRisk].reduce(
+      (current, next) =>
+        (RISK_ORDER[normalizeRisk(next)] || 0) > (RISK_ORDER[normalizeRisk(current)] || 0)
+          ? normalizeRisk(next)
+          : normalizeRisk(current),
+      RISK.low,
     );
-    // Retorna o risco correspondente ao valor máximo
-    if (maxRisk === 3) return "Favorável à Doença";
-    if (maxRisk === 2) return "Pouco Favorável";
-    return "Não Favorável";
   };
 
   const markers = [
@@ -232,7 +527,7 @@ const App = () => {
       diseaseRisk: "Favorável à Doença",
       fase: "Frutificação, frutos com 20 a 30 mm",
       syncAgo: "12 minutos",
-      fruits: ["🍎", "🍇"],
+      fruits: ["🍎"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -318,6 +613,17 @@ const App = () => {
         "As duas doenças compartilham as mesmas condições climáticas. Combater uma sem considerar a outra pode deixar o pomar exposto.",
       ],
       station: {
+        source: "INMET horário",
+        temp_med: 16.2,
+        temp_max: 18.0,
+        temp_min: 14.9,
+        umid_rel: 92,
+        precipitacao: 38,
+        press_med: 1012,
+        vento_vel: 7,
+        vento_dir: 180,
+        raj_vel: 12,
+        rad_sol_global: 120,
         temp: "16.2°C",
         hum: "92%",
         wetness: "38 h",
@@ -335,7 +641,7 @@ const App = () => {
       diseaseRisk: "Pouco Favorável",
       fase: "Floração plena",
       syncAgo: "8 minutos",
-      fruits: ["🍌", "🍊"],
+      fruits: ["🍎"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -403,6 +709,17 @@ const App = () => {
         "Uma única hora adicional de chuva pode elevar as duas doenças para Favorável à Doença simultaneamente.",
       ],
       station: {
+        source: "INMET horário",
+        temp_med: 15.5,
+        temp_max: 17.1,
+        temp_min: 13.9,
+        umid_rel: 91,
+        precipitacao: 8,
+        press_med: 1014,
+        vento_vel: 10,
+        vento_dir: 210,
+        raj_vel: 16,
+        rad_sol_global: 180,
         temp: "15.5°C",
         hum: "91%",
         wetness: "8 h",
@@ -420,7 +737,7 @@ const App = () => {
       diseaseRisk: "Não Favorável",
       fase: "Brotação, ponteira verde",
       syncAgo: "5 minutos",
-      fruits: ["🍐", "🥑", "🍎"],
+      fruits: ["🍎"],
       diseases: [
         {
           name: "Sarna da Maçã",
@@ -485,6 +802,17 @@ const App = () => {
       ],
       codependency: null,
       station: {
+        source: "INMET horário",
+        temp_med: 14.8,
+        temp_max: 20.2,
+        temp_min: 10.6,
+        umid_rel: 74,
+        precipitacao: 0,
+        press_med: 1016,
+        vento_vel: 18,
+        vento_dir: 160,
+        raj_vel: 29,
+        rad_sol_global: 680,
         temp: "14.8°C",
         hum: "74%",
         wetness: "0 h",
@@ -532,7 +860,24 @@ const App = () => {
         }
       ],
       codependency: null,
-      station: { temp: "13.0°C", hum: "95%", wetness: "12 h", rain: "15 mm", wind: "12 km/h" }
+      station: {
+        source: "INMET horário",
+        temp_med: 13.0,
+        temp_max: 15.4,
+        temp_min: 11.8,
+        umid_rel: 95,
+        precipitacao: 15,
+        press_med: 1011,
+        vento_vel: 12,
+        vento_dir: 190,
+        raj_vel: 21,
+        rad_sol_global: 140,
+        temp: "13.0°C",
+        hum: "95%",
+        wetness: "12 h",
+        rain: "15 mm",
+        wind: "12 km/h",
+      }
     },
     {
       id: 5,
@@ -571,28 +916,48 @@ const App = () => {
         }
       ],
       codependency: null,
-      station: { temp: "18.0°C", hum: "92%", wetness: "11 h", rain: "2 mm", wind: "5 km/h" }
+      station: {
+        source: "INMET horário",
+        temp_med: 18.0,
+        temp_max: 23.2,
+        temp_min: 14.3,
+        umid_rel: 92,
+        precipitacao: 2,
+        press_med: 1015,
+        vento_vel: 5,
+        vento_dir: 120,
+        raj_vel: 9,
+        rad_sol_global: 360,
+        temp: "18.0°C",
+        hum: "92%",
+        wetness: "11 h",
+        rain: "2 mm",
+        wind: "5 km/h",
+      }
     },
   ];
 
-  const riskColor = (r) =>
-    r === "Favorável à Doença"
-      ? C.red
-      : r === "Pouco Favorável"
-        ? "#ca8a04"
-        : C.greenMid;
-  const riskBg = (r) =>
-    r === "Favorável à Doença"
-      ? "#fef2f2"
-      : r === "Pouco Favorável"
-        ? "#fefce8"
-        : C.greenUltra;
-  const riskBorder = (r) =>
-    r === "Favorável à Doença"
-      ? "#fecaca"
-      : r === "Pouco Favorável"
-        ? "#fef08a"
-        : C.greenPale;
+  const riskColor = (r) => {
+    const risk = normalizeRisk(r);
+    if (risk === RISK.veryHigh) return C.red;
+    if (risk === RISK.high) return "#f97316";
+    if (risk === RISK.attention) return "#ca8a04";
+    return C.greenMid;
+  };
+  const riskBg = (r) => {
+    const risk = normalizeRisk(r);
+    if (risk === RISK.veryHigh) return "#fef2f2";
+    if (risk === RISK.high) return "#fff7ed";
+    if (risk === RISK.attention) return "#fefce8";
+    return C.greenUltra;
+  };
+  const riskBorder = (r) => {
+    const risk = normalizeRisk(r);
+    if (risk === RISK.veryHigh) return "#fecaca";
+    if (risk === RISK.high) return "#fed7aa";
+    if (risk === RISK.attention) return "#fef08a";
+    return C.greenPale;
+  };
 
   const handleMarkerClick = (marker) => {
     setActiveMarker(marker);
@@ -602,19 +967,22 @@ const App = () => {
 
   const getMarkerIcon = (m, isActive) => {
     const worstRisk = (alerts) => {
-      if (alerts.some(d => d.risk === "Favorável à Doença")) return "Favorável à Doença";
-      if (alerts.some(d => d.risk === "Pouco Favorável")) return "Pouco Favorável";
-      return "ok";
+      return alerts.reduce((current, disease) => {
+        const risk = getDiseaseAssessment(m.station, disease).risk;
+        return (RISK_ORDER[risk] || 0) > (RISK_ORDER[current] || 0) ? risk : current;
+      }, RISK.low);
     };
 
     const riskColorCode = (r) =>
-      r === "Favorável à Doença" ? "#ef4444"
-      : r === "Pouco Favorável"   ? "#f59e0b"
+      normalizeRisk(r) === RISK.veryHigh ? "#ef4444"
+      : normalizeRisk(r) === RISK.high ? "#f97316"
+      : normalizeRisk(r) === RISK.attention ? "#f59e0b"
       : "#22c55e";
 
     const riskBgCode = (r) =>
-      r === "Favorável à Doença" ? "#fff1f2"
-      : r === "Pouco Favorável"   ? "#fffbeb"
+      normalizeRisk(r) === RISK.veryHigh ? "#fff1f2"
+      : normalizeRisk(r) === RISK.high ? "#fff7ed"
+      : normalizeRisk(r) === RISK.attention ? "#fffbeb"
       : "#f0fdf4";
 
     const fruitsToRender = m.fruits || ["🍎"];
@@ -635,10 +1003,13 @@ const App = () => {
 
     const chipsHtml = fruitsToRender.map(f => {
       const alerts = alertsByFruit[f] || [];
-      const alertsWithRisk = alerts.filter(d => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável");
+      const fruitRisk = worstRisk(alerts);
+      const alertsWithRisk = alerts
+        .map((d) => ({ ...d, computedRisk: getDiseaseAssessment(m.station, d).risk }))
+        .filter((d) => (RISK_ORDER[d.computedRisk] || 0) > RISK_ORDER[RISK.low]);
 
       const dotsHtml = alertsWithRisk.slice(0, 3).map(d =>
-        `<div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${riskColorCode(d.risk)};flex-shrink:0;" title="${d.name}"></div>`
+        `<div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${riskColorCode(d.computedRisk)};flex-shrink:0;" title="${d.name}"></div>`
       ).join("");
 
       const dotsRow = alertsWithRisk.length > 0
@@ -650,8 +1021,8 @@ const App = () => {
           <div style="
             width:${chipSize}px;height:${chipSize}px;
             border-radius:${Math.round(10 * scale)}px;
-            background:#f0fdf4;
-            border:2px solid #d1fae5;
+            background:${riskBgCode(fruitRisk)};
+            border:2px solid ${riskBorder(fruitRisk)};
             display:flex;align-items:center;justify-content:center;
             box-shadow:0 2px 6px rgba(0,0,0,0.10);
             font-size:${emojiSize}px;line-height:1;
@@ -845,11 +1216,11 @@ const App = () => {
             const filters = [
               {
                 icon: Sprout,
-                label: "Fruta",
-                placeholder: "Selecione a fruta",
+                label: "Cultura",
+                placeholder: "Selecione a cultura",
                 val: selectedCrop,
                 set: setSelectedCrop,
-                opts: ["Maçã", "Banana", "Pera", "Uva", "Abacate", "Laranja"],
+                opts: ["Maçã"],
                 locked: false,
               },
               {
@@ -865,6 +1236,15 @@ const App = () => {
                   "Frutificação",
                   "Colheita",
                 ],
+                locked: false,
+              },
+              {
+                icon: Bug,
+                label: "Doença",
+                placeholder: "Selecione a doença",
+                val: selectedDisease,
+                set: setSelectedDisease,
+                opts: ["Sarna da Maçã", "Mancha de Gala", "Podridão Amarga"],
                 locked: false,
               },
               {
@@ -1022,10 +1402,10 @@ const App = () => {
                 {[
                   {
                     icon: Sprout,
-                    placeholder: "Fruta",
+                    placeholder: "Cultura",
                     val: selectedCrop,
                     set: setSelectedCrop,
-                    opts: ["Maçã", "Banana", "Pera", "Uva", "Abacate", "Laranja"],
+                    opts: ["Maçã"],
                     locked: false,
                   },
                   {
@@ -1040,6 +1420,14 @@ const App = () => {
                       "Frutificação",
                       "Colheita",
                     ],
+                    locked: false,
+                  },
+                  {
+                    icon: Bug,
+                    placeholder: "Doença",
+                    val: selectedDisease,
+                    set: setSelectedDisease,
+                    opts: ["Sarna da Maçã", "Mancha de Gala", "Podridão Amarga"],
                     locked: false,
                   },
                   {
@@ -1182,10 +1570,10 @@ const App = () => {
                   {[
                     {
                       icon: Sprout,
-                      placeholder: "Fruta",
+                      placeholder: "Cultura",
                       val: selectedCrop,
                       set: setSelectedCrop,
-                      opts: ["Maçã", "Banana", "Pera", "Uva", "Abacate", "Laranja"],
+                      opts: ["Maçã"],
                       locked: false,
                     },
                     {
@@ -1200,6 +1588,14 @@ const App = () => {
                         "Frutificação",
                         "Colheita",
                       ],
+                      locked: false,
+                    },
+                    {
+                      icon: Bug,
+                      placeholder: "Doença",
+                      val: selectedDisease,
+                      set: setSelectedDisease,
+                      opts: ["Sarna da Maçã", "Mancha de Gala", "Podridão Amarga"],
                       locked: false,
                     },
                     {
@@ -1338,24 +1734,93 @@ const App = () => {
               </div>
             </div>
 
-            {/* Fase Fenológica */}
+            {/* Área da estação */}
             <div
               className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-4"
               style={{ background: C.greenUltra, border: `1px solid ${C.greenPale}` }}
             >
               <Sprout size={15} style={{ color: C.green }} />
               <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Fase Fenológica</p>
-                <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>{activeMarker?.fase}</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Área da estação</p>
+                <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>
+                  Cálculo por latitude/longitude da estação ({activeMarker?.lat?.toFixed(2)}, {activeMarker?.lng?.toFixed(2)})
+                </p>
               </div>
             </div>
+
+            {activeMarker?.station && (() => {
+              const { indicators } = getCalculatedRisks(activeMarker.station);
+              const indicatorCards = [
+                {
+                  Icon: Leaf,
+                  label: "Molhamento estimado",
+                  value: `${formatNumber(indicators.wetnessHours, 0)} h`,
+                  detail: indicators.wetWindow,
+                },
+                {
+                  Icon: CloudRain,
+                  label: "Chuva 24h",
+                  value: `${formatNumber(indicators.rain24)} mm`,
+                  detail: `48h: ${formatNumber(indicators.rain48)} mm`,
+                },
+                {
+                  Icon: Droplets,
+                  label: "UR alta",
+                  value: `${indicators.highHumidityHours} h`,
+                  detail: "UR >= 90%",
+                },
+                {
+                  Icon: ThermometerSun,
+                  label: "Temp. período úmido",
+                  value: `${formatNumber(indicators.wetTempAvg)}°C`,
+                  detail: `Persistência: ${indicators.persistenceDays} dia(s)`,
+                },
+              ];
+
+              return (
+                <div className="mb-4 p-3 rounded-2xl" style={{ background: "#F8FAFB", border: "1px solid #eef2f0" }}>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-wider" style={{ color: "#9ca3af" }}>
+                        Fonte padrão
+                      </p>
+                      <p className="text-xs font-bold" style={{ color: C.textDark }}>
+                        {indicators.source}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-black uppercase tracking-wider" style={{ color: "#9ca3af" }}>
+                        Variáveis INMET
+                      </p>
+                      <p className="text-[10px] font-semibold" style={{ color: "#6b7280" }}>
+                        temp_med · umid_rel · precipitacao · vento_vel · rad_sol_global
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {indicatorCards.map(({ Icon, label, value, detail }) => (
+                      <div key={label} className="p-2.5 rounded-xl" style={{ background: C.white, border: "1px solid #eef2f0" }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Icon size={13} style={{ color: C.greenMid }} />
+                          <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>
+                            {label}
+                          </p>
+                        </div>
+                        <p className="text-sm font-black" style={{ color: C.textDark }}>{value}</p>
+                        <p className="text-[9px] mt-0.5" style={{ color: "#6b7280" }}>{detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Listagem de Doenças */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 px-1">
                 <Bug size={13} style={{ color: "#9ca3af" }} />
                 <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#9ca3af" }}>
-                  Monitoramento de Riscos
+                  Favorabilidade climática por doença
                 </p>
               </div>
 
@@ -1387,6 +1852,7 @@ const App = () => {
 
               {(() => {
                 const filteredDiseases = activeMarker?.diseases?.filter((d) => {
+                  if (selectedDisease && d.name !== selectedDisease) return false;
                   if (!selectedFruitTab || activeMarker.fruits.length === 1) return true;
                   return getFruitForDisease(d.name) === selectedFruitTab;
                 });
@@ -1400,11 +1866,10 @@ const App = () => {
                 }
 
                 return filteredDiseases.map((d, i) => {
-                  const calculated = getCalculatedRisks(activeMarker.station);
-                // Preserve mocked risks unless it's the 2 dynamically calculated apple diseases
-                let displayRisk = d.risk;
-                if (d.name === "Sarna da Maçã") displayRisk = calculated.sarnaRisk;
-                if (d.name === "Mancha de Gala") displayRisk = calculated.galaRisk;
+                  const assessment = getDiseaseAssessment(activeMarker.station, d);
+                  const displayRisk = assessment.risk;
+                  const alertCause = assessment.alertCause?.length ? assessment.alertCause : d.alertCause;
+                  const sensitivePhases = assessment.phases || [];
 
                 return (
                   <div
@@ -1431,7 +1896,7 @@ const App = () => {
                       }}
                     >
                       <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: riskColor(displayRisk) }}>
-                        Status de Risco
+                        Nível de favorabilidade
                       </span>
                       <span
                         className="px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide text-white shadow-sm"
@@ -1440,6 +1905,38 @@ const App = () => {
                         {displayRisk}
                       </span>
                     </div>
+
+                    <div
+                      className="mb-4 p-3 rounded-xl"
+                      style={{ background: riskBg(displayRisk), border: `1px solid ${riskBorder(displayRisk)}` }}
+                    >
+                      <p className="text-[11px] leading-relaxed font-semibold" style={{ color: riskColor(displayRisk) }}>
+                        {RISK_MESSAGES[normalizeRisk(displayRisk)]}
+                      </p>
+                    </div>
+
+                    {sensitivePhases.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "#9ca3af" }}>
+                          Fases fenológicas sensíveis
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sensitivePhases.map((phase) => (
+                            <span
+                              key={phase}
+                              className="px-2 py-1 rounded-lg text-[10px] font-bold"
+                              style={{
+                                background: C.greenUltra,
+                                color: C.green,
+                                border: `1px solid ${C.greenPale}`,
+                              }}
+                            >
+                              {phase}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Card: Sobre e Condições */}
                     <div
@@ -1460,10 +1957,10 @@ const App = () => {
                     {/* Causas do Alerta (Dados integrados) */}
                     <div className="space-y-2.5">
                       <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#9ca3af" }}>
-                        Motivo do Alerta
+                        Fatores meteorológicos
                       </p>
                       <div className="grid grid-cols-1 gap-2">
-                        {d.alertCause?.map((ac, j) => {
+                        {alertCause?.map((ac, j) => {
                           const Icon = ac.label.includes("Umidade") ? Droplets :
                             ac.label.includes("Temperatura") ? ThermometerSun :
                               ac.label.includes("Chuva") ? CloudRain : Wind;
@@ -1510,6 +2007,14 @@ const App = () => {
                 );
               });
               })()}
+              <div
+                className="p-3 rounded-xl"
+                style={{ background: "#F8FAFB", border: "1px solid #eef2f0" }}
+              >
+                <p className="text-[11px] leading-relaxed font-semibold" style={{ color: "#6b7280" }}>
+                  {STANDARD_DISCLAIMER}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1549,7 +2054,7 @@ const App = () => {
               {[
                 {
                   icon: Sprout,
-                  placeholder: "Fruta",
+                  placeholder: "Cultura",
                   val: selectedCrop,
                   set: setSelectedCrop,
                   opts: ["Maçã"],
@@ -1578,7 +2083,6 @@ const App = () => {
                     "Sarna da Maçã",
                     "Mancha de Gala",
                     "Podridão Amarga",
-                    "Míldio",
                   ],
                   locked: false,
                 },
