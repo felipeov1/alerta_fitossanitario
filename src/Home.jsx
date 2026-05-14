@@ -57,6 +57,19 @@ export default function Home() {
             <span className="text-base font-black">Versão 2 — Alerta Previsão</span>
             <span className="text-xs font-medium opacity-60">/v2</span>
           </button>
+
+          <button
+            onClick={() => window.open("/calculo-teste", "_blank")}
+            className="w-full py-4 px-5 rounded-xl font-bold text-base transition-all hover:opacity-90 flex flex-col items-center gap-0.5"
+            style={{
+              background: C.greenUltra,
+              color: C.green,
+              border: `2px solid ${C.greenPale}`,
+            }}
+          >
+            <span className="text-base font-black">Calculo Teste - Molhamento</span>
+            <span className="text-xs font-medium opacity-60">/calculo-teste</span>
+          </button>
         </div>
       </div>
     </div>
