@@ -193,6 +193,92 @@ function formatPercent(count, total) {
   return `${formatNumber((count / total) * 100, 1)}%`;
 }
 
+function isOpenMeteoRaw(json) {
+  return Boolean(json?.hourly && Array.isArray(json.hourly.time));
+}
+
+function offsetToText(offsetSeconds) {
+  const numericOffset = Number(offsetSeconds);
+  if (!Number.isFinite(numericOffset)) return null;
+
+  const sign = numericOffset < 0 ? "-" : "+";
+  const absolute = Math.abs(numericOffset);
+  const hours = String(Math.floor(absolute / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((absolute % 3600) / 60)).padStart(2, "0");
+  return `${sign}${hours}:${minutes}`;
+}
+
+function normalizeOpenMeteoTime(value, json) {
+  if (value === null || value === undefined) return null;
+
+  const text = String(value);
+  if (hasTimezone(text)) return text;
+
+  const offset =
+    offsetToText(json?.utc_offset_seconds) ||
+    (json?.timezone === "America/Sao_Paulo" ? "-03:00" : null);
+
+  if (!offset || !text.includes("T")) return text;
+  return `${text.length === 16 ? `${text}:00` : text}${offset}`;
+}
+
+function datePart(value) {
+  if (!value) return null;
+  return String(value).slice(0, 10);
+}
+
+function hourlyValue(hourly, key, index) {
+  const values = hourly?.[key];
+  if (!Array.isArray(values) || values[index] === undefined) return null;
+  return values[index] ?? null;
+}
+
+function convertOpenMeteoRaw(json) {
+  if (!isOpenMeteoRaw(json)) {
+    throw new Error("O JSON nao parece ser uma resposta bruta do Open-Meteo.");
+  }
+
+  const hourly = json.hourly;
+  const times = hourly.time;
+  if (!times.length) {
+    throw new Error("hourly.time esta vazio.");
+  }
+
+  const dadosHorarios = times.map((time, index) => ({
+    data_hora: normalizeOpenMeteoTime(time, json),
+    temperatura_c: hourlyValue(hourly, "temperature_2m", index),
+    umidade_relativa: hourlyValue(hourly, "relative_humidity_2m", index),
+    ponto_orvalho_c: hourlyValue(hourly, "dew_point_2m", index),
+    precipitacao_mm: hourlyValue(hourly, "precipitation", index),
+    chuva_mm: hourlyValue(hourly, "rain", index),
+    vento_ms: hourlyValue(hourly, "wind_speed_10m", index),
+    pressao_hpa: hourlyValue(hourly, "surface_pressure", index),
+    nebulosidade_percentual: hourlyValue(hourly, "cloud_cover", index),
+  }));
+
+  return {
+    fonte: "Open-Meteo",
+    modelo: "GFS",
+    local: {
+      nome: "Londrina",
+      estado: "PR",
+      latitude: json.latitude ?? null,
+      longitude: json.longitude ?? null,
+      timezone: json.timezone ?? null,
+    },
+    periodo: {
+      inicio: datePart(dadosHorarios[0]?.data_hora),
+      fim: datePart(dadosHorarios[dadosHorarios.length - 1]?.data_hora),
+      granularidade: "horaria",
+    },
+    dados_horarios: dadosHorarios,
+  };
+}
+
+function toCalculatorJson(json) {
+  return isOpenMeteoRaw(json) ? convertOpenMeteoRaw(json) : json;
+}
+
 function normalizeRows(json) {
   const rawRows = Array.isArray(json?.dados_horarios) ? json.dados_horarios : [];
   const rows = [];
@@ -439,7 +525,8 @@ export default function CalculoTeste() {
 
   const handleCalculate = () => {
     try {
-      const json = JSON.parse(jsonText);
+      const inputJson = JSON.parse(jsonText);
+      const json = toCalculatorJson(inputJson);
       if (!Array.isArray(json?.dados_horarios)) {
         setMessage({ text: "Campo dados_horarios ausente ou invalido.", type: "error" });
         return;
@@ -453,15 +540,35 @@ export default function CalculoTeste() {
       }
 
       setParsedJson(json);
+      if (json !== inputJson) {
+        setJsonText(JSON.stringify(json, null, 2));
+      }
       setMessage({
         text:
           calculated.invalid.length > 0
-            ? `Calculo concluido. ${calculated.invalid.length} hora(s) ignorada(s).`
-            : "Calculo concluido.",
+            ? `JSON Open-Meteo convertido. ${calculated.invalid.length} hora(s) ignorada(s).`
+            : json !== inputJson
+              ? "JSON Open-Meteo convertido e calculado."
+              : "Calculo concluido.",
         type: calculated.invalid.length > 0 ? "warn" : "ok",
       });
     } catch (error) {
       setMessage({ text: `JSON invalido: ${error.message}`, type: "error" });
+    }
+  };
+
+  const handleConvertOpenMeteo = () => {
+    try {
+      const inputJson = JSON.parse(jsonText);
+      const convertedJson = convertOpenMeteoRaw(inputJson);
+      setJsonText(JSON.stringify(convertedJson, null, 2));
+      setParsedJson(convertedJson);
+      setMessage({
+        text: `JSON Open-Meteo convertido com ${convertedJson.dados_horarios.length} hora(s).`,
+        type: "ok",
+      });
+    } catch (error) {
+      setMessage({ text: `Conversao falhou: ${error.message}`, type: "error" });
     }
   };
 
@@ -471,9 +578,19 @@ export default function CalculoTeste() {
     const text = await file.text();
     setJsonText(text);
     try {
-      const json = JSON.parse(text);
+      const inputJson = JSON.parse(text);
+      const json = toCalculatorJson(inputJson);
+      if (json !== inputJson) {
+        setJsonText(JSON.stringify(json, null, 2));
+      }
       setParsedJson(json);
-      setMessage({ text: `Arquivo carregado: ${file.name}`, type: "ok" });
+      setMessage({
+        text:
+          json !== inputJson
+            ? `Arquivo Open-Meteo convertido: ${file.name}`
+            : `Arquivo carregado: ${file.name}`,
+        type: "ok",
+      });
     } catch (error) {
       setMessage({ text: `JSON invalido: ${error.message}`, type: "error" });
     }
@@ -503,6 +620,15 @@ export default function CalculoTeste() {
               JSON
               <input className="hidden" type="file" accept=".json,application/json" onChange={handleFile} />
             </label>
+            <button
+              type="button"
+              onClick={handleConvertOpenMeteo}
+              className="inline-flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm font-bold"
+              style={{ borderColor: C.greenPale, background: C.greenUltra, color: C.green }}
+            >
+              <FileJson size={16} />
+              Converter Open-Meteo
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -546,6 +672,9 @@ export default function CalculoTeste() {
               <h2 className="text-sm font-black" style={{ color: C.textDark }}>
                 Entrada JSON
               </h2>
+              <span className="hidden text-xs font-semibold text-slate-500 sm:inline">
+                Formato da calculadora ou Open-Meteo bruto
+              </span>
               <span
                 className="rounded-full px-2.5 py-1 text-[11px] font-black"
                 style={{
