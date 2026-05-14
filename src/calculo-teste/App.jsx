@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Calculator,
@@ -414,6 +414,12 @@ function calculateFromJson(json) {
   return {
     ...normalized,
     rows,
+    ...buildResultForRows(rows),
+  };
+}
+
+function buildResultForRows(rows) {
+  return {
     methods: methodSummary(rows),
     rhThresholds: thresholdResults(
       rows,
@@ -427,6 +433,25 @@ function calculateFromJson(json) {
     ),
     periods: summarizePeriods(rows),
   };
+}
+
+function groupRowsByDay(rows) {
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const day = localDateParts(row.date).date;
+    if (!grouped.has(day)) {
+      grouped.set(day, []);
+    }
+    grouped.get(day).push(row);
+  });
+
+  return [...grouped.entries()].map(([date, dayRows], index) => ({
+    date,
+    label: `Dia ${index + 1}`,
+    rows: dayRows,
+    wetHours: count(dayRows, (row) => row.combinedWet),
+  }));
 }
 
 function Pill({ value }) {
@@ -505,6 +530,7 @@ export default function CalculoTeste() {
   const [jsonText, setJsonText] = useState(JSON.stringify(sampleJson, null, 2));
   const [parsedJson, setParsedJson] = useState(sampleJson);
   const [message, setMessage] = useState({ text: "Exemplo carregado.", type: "ok" });
+  const [selectedDay, setSelectedDay] = useState("");
 
   const result = useMemo(() => {
     try {
@@ -514,12 +540,37 @@ export default function CalculoTeste() {
     }
   }, [parsedJson]);
 
+  const dayTabs = useMemo(() => groupRowsByDay(result?.rows ?? []), [result]);
+
+  useEffect(() => {
+    if (!dayTabs.length) {
+      setSelectedDay("");
+      return;
+    }
+
+    if (!dayTabs.some((tab) => tab.date === selectedDay)) {
+      setSelectedDay(dayTabs[0].date);
+    }
+  }, [dayTabs, selectedDay]);
+
+  const selectedDayResult = useMemo(() => {
+    if (!result) return null;
+
+    const activeTab = dayTabs.find((tab) => tab.date === selectedDay) ?? dayTabs[0];
+    const rows = activeTab?.rows ?? result.rows;
+
+    return {
+      rows,
+      ...buildResultForRows(rows),
+    };
+  }, [dayTabs, result, selectedDay]);
+
   const local = parsedJson?.local;
   const localLabel = [local?.nome, local?.estado].filter(Boolean).join(" - ") || "-";
   const periodLabel =
-    result?.rows?.length > 0
-      ? `${localDateParts(result.rows[0].date).label} ate ${
-          localDateParts(result.rows[result.rows.length - 1].date).label
+    selectedDayResult?.rows?.length > 0
+      ? `${localDateParts(selectedDayResult.rows[0].date).label} ate ${
+          localDateParts(selectedDayResult.rows[selectedDayResult.rows.length - 1].date).label
         }`
       : "-";
 
@@ -666,6 +717,41 @@ export default function CalculoTeste() {
           </div>
         </header>
 
+        {dayTabs.length > 0 && (
+          <nav
+            className="mb-4 overflow-x-auto rounded-lg border bg-white p-2 shadow-sm"
+            style={{ borderColor: C.border }}
+          >
+            <div className="flex min-w-max gap-2">
+              {dayTabs.map((tab) => {
+                const active = tab.date === selectedDay || (!selectedDay && tab === dayTabs[0]);
+                return (
+                  <button
+                    key={tab.date}
+                    type="button"
+                    onClick={() => setSelectedDay(tab.date)}
+                    className="min-h-12 rounded-md border px-4 text-left transition-all"
+                    style={{
+                      minWidth: 150,
+                      background: active ? C.green : C.white,
+                      borderColor: active ? C.green : C.border,
+                      color: active ? C.white : C.textDark,
+                    }}
+                  >
+                    <span className="block text-[10px] font-black uppercase tracking-wide opacity-80">
+                      {tab.label}
+                    </span>
+                    <span className="block text-sm font-black">{tab.date}</span>
+                    <span className="block text-[11px] font-semibold opacity-80">
+                      {tab.rows.length} h / {tab.wetHours} h molhadas
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
+
         <section className="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           <div className="rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -708,7 +794,7 @@ export default function CalculoTeste() {
             <div className="grid gap-3 sm:grid-cols-2">
               <StatCard icon={ClipboardCheck} label="Local" value={localLabel} />
               <StatCard icon={Table2} label="Periodo" value={periodLabel} />
-              <StatCard icon={CheckCircle2} label="Horas validas" value={result?.rows.length ?? 0} />
+              <StatCard icon={CheckCircle2} label="Horas do dia" value={selectedDayResult?.rows.length ?? 0} />
               <StatCard
                 icon={AlertCircle}
                 label="Inconsistencias"
@@ -732,7 +818,7 @@ export default function CalculoTeste() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(result?.methods ?? []).map((method) => (
+                    {(selectedDayResult?.methods ?? []).map((method) => (
                       <tr key={method.method} className="border-t" style={{ borderColor: C.border }}>
                         <td className="px-3 py-2 font-semibold">{method.method}</td>
                         <td className="px-3 py-2 text-slate-600">{method.rule}</td>
@@ -752,15 +838,15 @@ export default function CalculoTeste() {
             <div className="grid gap-4 md:grid-cols-2">
               <ThresholdList
                 title="UR calibrada localmente"
-                rows={result?.rhThresholds ?? []}
+                rows={selectedDayResult?.rhThresholds ?? []}
                 suffix="UR >="
-                total={result?.rows.length ?? 0}
+                total={selectedDayResult?.rows.length ?? 0}
               />
               <ThresholdList
                 title="DPD calibrado"
-                rows={result?.dpdThresholds ?? []}
+                rows={selectedDayResult?.dpdThresholds ?? []}
                 suffix="DPD <"
-                total={result?.rows.length ?? 0}
+                total={selectedDayResult?.rows.length ?? 0}
               />
             </div>
           </div>
@@ -788,7 +874,7 @@ export default function CalculoTeste() {
                 </tr>
               </thead>
               <tbody>
-                {(result?.periods ?? []).map((period) => (
+                {(selectedDayResult?.periods ?? []).map((period) => (
                   <tr key={`${period.date}-${period.periodo}`} className="border-t" style={{ borderColor: C.border }}>
                     <td className="px-3 py-2 font-semibold">{period.date}</td>
                     <td className="px-3 py-2">{period.periodo}</td>
@@ -832,7 +918,7 @@ export default function CalculoTeste() {
                 </tr>
               </thead>
               <tbody>
-                {(result?.rows ?? []).map((row) => {
+                {(selectedDayResult?.rows ?? []).map((row) => {
                   const parts = localDateParts(row.date);
                   return (
                     <tr key={`${row.index}-${row.timeValue}`} className="border-t" style={{ borderColor: C.border }}>
