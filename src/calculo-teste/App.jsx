@@ -127,6 +127,89 @@ const sampleJson = {
   ],
 };
 
+const CONTROLLED_DAY = "2026-05-14";
+const CONTROLLED_STATION_ID = "23365116";
+const CONTROLLED_SENSOR_LABEL = "Sensor 1m";
+const CONTROLLED_UR_THRESHOLDS = Array.from({ length: 11 }, (_, index) => 80 + index);
+const CONTROLLED_DPD_THRESHOLDS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+const CONTROLLED_RAIN_RULES = [
+  { id: "rain_gt_0", label: "> 0", rule: "precipitacao_mm > 0", test: (row) => rowRainAbove(row, 0, false) },
+  { id: "rain_ge_01", label: ">= 0,1", rule: "precipitacao_mm >= 0,1", test: (row) => rowRainAbove(row, 0.1) },
+  { id: "rain_ge_02", label: ">= 0,2", rule: "precipitacao_mm >= 0,2", test: (row) => rowRainAbove(row, 0.2) },
+  { id: "rain_ge_05", label: ">= 0,5", rule: "precipitacao_mm >= 0,5", test: (row) => rowRainAbove(row, 0.5) },
+];
+const CONTROLLED_COMBINED_RULES = [
+  {
+    id: "combined_or_simple",
+    label: "Combinado OR simples",
+    rule: "precipitacao_mm > 0 OR UR >= 90 OR DPD < 2",
+    test: (row) => rowRainAbove(row, 0, false) || rowRhAtLeast(row, 90) || rowDpdBelow(row, 2),
+  },
+  {
+    id: "combined_cal_1",
+    label: "Combinado calibrado 1",
+    rule: "precipitacao_mm > 0 OR UR >= 85 OR DPD < 2",
+    test: (row) => rowRainAbove(row, 0, false) || rowRhAtLeast(row, 85) || rowDpdBelow(row, 2),
+  },
+  {
+    id: "combined_cal_2",
+    label: "Combinado calibrado 2",
+    rule: "precipitacao_mm > 0 OR UR >= 88 OR DPD < 2",
+    test: (row) => rowRainAbove(row, 0, false) || rowRhAtLeast(row, 88) || rowDpdBelow(row, 2),
+  },
+  {
+    id: "combined_restrict_1",
+    label: "Combinado restritivo 1",
+    rule: "precipitacao_mm > 0 OR (UR >= 85 AND DPD < 3)",
+    test: (row) => rowRainAbove(row, 0, false) || (rowRhAtLeast(row, 85) && rowDpdBelow(row, 3)),
+  },
+  {
+    id: "combined_restrict_2",
+    label: "Combinado restritivo 2",
+    rule: "precipitacao_mm > 0 OR (UR >= 88 AND DPD < 2,5)",
+    test: (row) => rowRainAbove(row, 0, false) || (rowRhAtLeast(row, 88) && rowDpdBelow(row, 2.5)),
+  },
+  {
+    id: "combined_restrict_3",
+    label: "Combinado restritivo 3",
+    rule: "precipitacao_mm > 0 OR (UR >= 90 AND DPD < 2)",
+    test: (row) => rowRainAbove(row, 0, false) || (rowRhAtLeast(row, 90) && rowDpdBelow(row, 2)),
+  },
+  {
+    id: "combined_rain_01",
+    label: "Combinado com chuva >= 0,1",
+    rule: "precipitacao_mm >= 0,1 OR (UR >= 88 AND DPD < 2,5)",
+    test: (row) => rowRainAbove(row, 0.1) || (rowRhAtLeast(row, 88) && rowDpdBelow(row, 2.5)),
+  },
+];
+
+const REAL_LEAF_WETNESS_2026_05_14 = [
+  { data_hora: "2026-05-14T00:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T01:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T02:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T03:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T04:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T05:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T06:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T07:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T08:00:00-03:00", registros: 4, seco_min: 47.7, contaminado_min: 5.2, molhado_min: 7.2, umido_min: 12.4 },
+  { data_hora: "2026-05-14T09:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T10:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T11:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T12:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T13:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T14:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T15:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T16:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T17:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T18:00:00-03:00", registros: 4, seco_min: 60.0, contaminado_min: 0.0, molhado_min: 0.0, umido_min: 0.0 },
+  { data_hora: "2026-05-14T19:00:00-03:00", registros: 4, seco_min: 26.8, contaminado_min: 0.7, molhado_min: 32.5, umido_min: 33.2 },
+  { data_hora: "2026-05-14T20:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T21:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T22:00:00-03:00", registros: 4, seco_min: 0.0, contaminado_min: 0.0, molhado_min: 60.0, umido_min: 60.0 },
+  { data_hora: "2026-05-14T23:00:00-03:00", registros: 4, seco_min: 6.8, contaminado_min: 3.0, molhado_min: 50.2, umido_min: 53.2 },
+];
+
 function asNumber(value) {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
@@ -139,6 +222,33 @@ function firstNumber(...values) {
     if (number !== null) return number;
   }
   return null;
+}
+
+function hasNumberValue(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function rowRhAtLeast(row, threshold) {
+  return hasNumberValue(row.umidade) && row.umidade >= threshold;
+}
+
+function rowDpdBelow(row, threshold) {
+  return hasNumberValue(row.dpd) && row.dpd < threshold;
+}
+
+function rowRainAbove(row, threshold, inclusive = true) {
+  if (!hasNumberValue(row.precipitacao)) return false;
+  return inclusive ? row.precipitacao >= threshold : row.precipitacao > threshold;
+}
+
+function dewPointMagnus(temperatura, umidade) {
+  if (!hasNumberValue(temperatura) || !hasNumberValue(umidade) || umidade <= 0) return null;
+
+  const a = 17.27;
+  const b = 237.7;
+  const alpha = (a * temperatura) / (b + temperatura) + Math.log(umidade / 100);
+  const pontoOrvalho = (b * alpha) / (a - alpha);
+  return Number.isFinite(pontoOrvalho) ? pontoOrvalho : null;
 }
 
 function hasTimezone(value) {
@@ -290,7 +400,8 @@ function normalizeRows(json) {
     const date = parseDate(timeValue, timeKey !== "data_hora");
     const temperatura = firstNumber(raw.temperatura_c);
     const umidade = firstNumber(raw.umidade_relativa);
-    const pontoOrvalho = firstNumber(raw.ponto_orvalho_c);
+    const pontoOrvalhoInformado = firstNumber(raw.ponto_orvalho_c);
+    const pontoOrvalho = pontoOrvalhoInformado ?? dewPointMagnus(temperatura, umidade);
     const precipitacao = firstNumber(raw.precipitacao_mm, raw.chuva_mm);
     const dpdFromTemp =
       temperatura !== null && pontoOrvalho !== null ? temperatura - pontoOrvalho : null;
@@ -463,88 +574,12 @@ function groupRowsByDay(rows) {
   }));
 }
 
-function normalizarJsonBanco(input) {
-  const registrosBrutos = Array.isArray(input)
-    ? input
-    : Object.values(input ?? {}).find((value) => Array.isArray(value));
-
-  if (!Array.isArray(registrosBrutos)) {
-    throw new Error("Informe uma lista de registros ou um objeto com uma propriedade que contenha uma lista.");
-  }
-
-  return registrosBrutos
-    .map((registro, index) => {
-      if (!registro?.data_hora) return null;
-
-      const date = parseDate(registro.data_hora);
-      if (!date) return null;
-
-      const parts = localDateParts(date);
-      return {
-        ...registro,
-        index,
-        date,
-        data_hora_local: parts.label,
-        dia_local: parts.date,
-        estacao_id: registro.estacao_id ?? null,
-        temperatura: firstNumber(registro.temperatura_c),
-        umidade: firstNumber(registro.umidade_relativa),
-        pontoOrvalho: firstNumber(registro.ponto_orvalho_c),
-        precipitacao: firstNumber(registro.precipitacao_mm, registro.chuva_mm),
-        vento: firstNumber(registro.vento_ms),
-        pressao_hpa: firstNumber(registro.pressao_hpa),
-        molfoliar_1m_molhado: firstNumber(registro.molfoliar_1m_molhado),
-        molfoliar_1m_condensacao: firstNumber(registro.molfoliar_1m_condensacao),
-        molfoliar_2m_molhado: firstNumber(registro.molfoliar_2m_molhado),
-        molfoliar_2m_condensacao: firstNumber(registro.molfoliar_2m_condensacao),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.date - b.date);
-}
-
-function agruparPorDiaLocal(registros) {
-  const agrupado = new Map();
-
-  registros.forEach((registro) => {
-    const dia =
-      registro.dia_local ??
-      (registro.date ? localDateParts(registro.date).date : null);
-    if (!dia) return;
-
-    if (!agrupado.has(dia)) {
-      agrupado.set(dia, []);
-    }
-    agrupado.get(dia).push(registro);
-  });
-
-  return agrupado;
-}
-
 function valorRegistro(registro, ...chaves) {
   for (const chave of chaves) {
     const valor = firstNumber(registro?.[chave], registro?.source?.[chave]);
     if (valor !== null) return valor;
   }
   return null;
-}
-
-function valoresNumericos(registros, ...chaves) {
-  return registros
-    .map((registro) => valorRegistro(registro, ...chaves))
-    .filter((valor) => valor !== null);
-}
-
-function minOrNull(valores) {
-  return valores.length ? Math.min(...valores) : null;
-}
-
-function maxOrNull(valores) {
-  return valores.length ? Math.max(...valores) : null;
-}
-
-function sumOrNull(valores) {
-  return valores.length ? valores.reduce((total, valor) => total + valor, 0) : null;
 }
 
 function calcularSensor(registros, molhadoKey, condensacaoKey = null) {
@@ -562,18 +597,15 @@ function calcularSensor(registros, molhadoKey, condensacaoKey = null) {
     return { ocorrencia: null, duracao: null, minutos: null };
   }
 
+  const minutos = minutosPorHora.reduce((total, valor) => total + valor, 0);
   return {
     ocorrencia: minutosPorHora.filter((valor) => valor > 0).length,
-    duracao: minutosPorHora.reduce((total, valor) => total + valor, 0) / 60,
-    minutos: minutosPorHora.reduce((total, valor) => total + valor, 0),
+    duracao: minutos / 60,
+    minutos,
   };
 }
 
 function calcularMetricasReais(registrosDoDia) {
-  const temperaturas = valoresNumericos(registrosDoDia, "temperatura", "temperatura_c");
-  const umidades = valoresNumericos(registrosDoDia, "umidade", "umidade_relativa");
-  const chuvas = valoresNumericos(registrosDoDia, "precipitacao", "precipitacao_mm", "chuva_mm");
-
   const sensor1mMolhado = calcularSensor(registrosDoDia, "molfoliar_1m_molhado");
   const sensor1mUmido = calcularSensor(
     registrosDoDia,
@@ -588,12 +620,6 @@ function calcularMetricasReais(registrosDoDia) {
   );
 
   return {
-    total_horas: registrosDoDia.length,
-    chuva_total_mm: sumOrNull(chuvas) ?? 0,
-    temp_min: minOrNull(temperaturas),
-    temp_max: maxOrNull(temperaturas),
-    umidade_min: minOrNull(umidades),
-    umidade_max: maxOrNull(umidades),
     ocorrencia_1m_molhado: sensor1mMolhado.ocorrencia,
     duracao_1m_molhado: sensor1mMolhado.duracao,
     minutos_1m_molhado: sensor1mMolhado.minutos,
@@ -607,61 +633,6 @@ function calcularMetricasReais(registrosDoDia) {
     duracao_2m_umido: sensor2mUmido.duracao,
     minutos_2m_umido: sensor2mUmido.minutos,
   };
-}
-
-const COMPARACOES_ESTACAO_BANCO = [
-  { key: "total_horas", label: "Total de horas", threshold: 1, kind: "hours_count" },
-  { key: "chuva_total_mm", label: "Chuva total", threshold: 0.1, kind: "rain" },
-  { key: "temp_min", label: "Temp min", threshold: 0.1, kind: "temp" },
-  { key: "temp_max", label: "Temp max", threshold: 0.1, kind: "temp" },
-  { key: "umidade_min", label: "Umidade min", threshold: 1, kind: "humidity" },
-  { key: "umidade_max", label: "Umidade max", threshold: 1, kind: "humidity" },
-  {
-    key: "ocorrencia_1m_molhado",
-    label: "Sensor 1m molhado ocorrencia",
-    threshold: 1,
-    kind: "hours_count",
-  },
-  {
-    key: "duracao_1m_molhado",
-    label: "Sensor 1m molhado duracao real",
-    threshold: 0.1,
-    kind: "duration",
-  },
-  {
-    key: "ocorrencia_2m_molhado",
-    label: "Sensor 2m molhado ocorrencia",
-    threshold: 1,
-    kind: "hours_count",
-  },
-  {
-    key: "duracao_2m_molhado",
-    label: "Sensor 2m molhado duracao real",
-    threshold: 0.1,
-    kind: "duration",
-  },
-];
-
-function compararEstacaoComBanco(metricasEstacao, metricasBanco) {
-  return COMPARACOES_ESTACAO_BANCO.map((comparacao) => {
-    const estacao = metricasEstacao?.[comparacao.key] ?? null;
-    const banco = metricasBanco?.[comparacao.key] ?? null;
-    const diferenca = estacao !== null && banco !== null ? banco - estacao : null;
-    const status =
-      diferenca === null
-        ? "-"
-        : Math.abs(diferenca) >= comparacao.threshold
-          ? "Divergente"
-          : "OK";
-
-    return {
-      ...comparacao,
-      estacao,
-      banco,
-      diferenca,
-      status,
-    };
-  });
 }
 
 const SENSOR_REAL_ROWS = [
@@ -691,8 +662,166 @@ const SENSOR_REAL_ROWS = [
   },
 ];
 
+function calculateControlledRealTotals(realRows) {
+  const molhadoMin = realRows.reduce((total, row) => total + row.molhado_min, 0);
+  const umidoMin = realRows.reduce((total, row) => total + row.umido_min, 0);
+
+  return {
+    horasAnalisadas: realRows.length,
+    molhadoMin,
+    molhadoHoras: molhadoMin / 60,
+    umidoMin,
+    umidoHoras: umidoMin / 60,
+    ocorrenciaMolhado: count(realRows, (row) => row.molhado_min > 0),
+    ocorrenciaUmido: count(realRows, (row) => row.umido_min > 0),
+  };
+}
+
+const REAL_LEAF_WETNESS_TOTALS_2026_05_14 = calculateControlledRealTotals(
+  REAL_LEAF_WETNESS_2026_05_14,
+);
+
+function getControlledForecastRows(rows) {
+  const byHour = new Map();
+
+  rows.forEach((row) => {
+    const parts = localDateParts(row.date);
+    if (parts.date !== CONTROLLED_DAY) return;
+
+    const key = `${parts.date}-${parts.hour}`;
+    if (!byHour.has(key)) byHour.set(key, row);
+  });
+
+  return [...byHour.values()].sort((a, b) => a.date - b.date);
+}
+
+function getMissingControlledHours(rows) {
+  const hours = new Set(rows.map((row) => localDateParts(row.date).hour));
+  return Array.from({ length: 24 }, (_, hour) => hour).filter((hour) => !hours.has(hour));
+}
+
+function controlledHourLabel(row) {
+  const parts = localDateParts(row.date);
+  return `${String(parts.hour).padStart(2, "0")}:00`;
+}
+
+function controlledStatus(absError) {
+  if (absError <= 1) return "bom";
+  if (absError <= 2) return "aceitavel";
+  return "ruim";
+}
+
+function buildControlledMethodResult({ group, method, label, rule, test }, rows, realTotals) {
+  const markedRows = rows.filter(test);
+  const horasEstimadas = markedRows.length;
+  const erroMolhado = horasEstimadas - realTotals.molhadoHoras;
+  const erroUmido = horasEstimadas - realTotals.umidoHoras;
+
+  return {
+    id: `${group}-${label}`,
+    group,
+    method,
+    label,
+    rule,
+    horasEstimadas,
+    erroMolhado,
+    erroAbsMolhado: Math.abs(erroMolhado),
+    erroUmido,
+    erroAbsUmido: Math.abs(erroUmido),
+    horasMarcadas: markedRows.map(controlledHourLabel),
+    status: controlledStatus(Math.abs(erroMolhado)),
+  };
+}
+
+function buildControlledValidation(rows) {
+  const forecastRows = getControlledForecastRows(rows);
+  const realTotals = REAL_LEAF_WETNESS_TOTALS_2026_05_14;
+
+  const urResults = CONTROLLED_UR_THRESHOLDS.map((threshold) =>
+    buildControlledMethodResult(
+      {
+        group: "UR calibrada 80-90%",
+        method: "UR calibrada",
+        label: `UR >= ${threshold}%`,
+        rule: `UR >= ${threshold}`,
+        test: (row) => rowRhAtLeast(row, threshold),
+      },
+      forecastRows,
+      realTotals,
+    ),
+  );
+
+  const dpdResults = CONTROLLED_DPD_THRESHOLDS.map((threshold) =>
+    buildControlledMethodResult(
+      {
+        group: "DPD calibrado",
+        method: "DPD calibrado",
+        label: `DPD < ${String(threshold).replace(".", ",")}`,
+        rule: `DPD < ${threshold}`,
+        test: (row) => rowDpdBelow(row, threshold),
+      },
+      forecastRows,
+      realTotals,
+    ),
+  );
+
+  const rainResults = CONTROLLED_RAIN_RULES.map((rule) =>
+    buildControlledMethodResult(
+      {
+        group: "Chuva direta",
+        method: "Chuva direta",
+        label: rule.label,
+        rule: rule.rule,
+        test: rule.test,
+      },
+      forecastRows,
+      realTotals,
+    ),
+  );
+
+  const combinedResults = CONTROLLED_COMBINED_RULES.map((rule) =>
+    buildControlledMethodResult(
+      {
+        group: "Modelos combinados",
+        method: rule.label,
+        label: rule.label,
+        rule: rule.rule,
+        test: rule.test,
+      },
+      forecastRows,
+      realTotals,
+    ),
+  );
+
+  const ranking = [...urResults, ...dpdResults, ...rainResults, ...combinedResults].sort((a, b) => {
+    const errorCompare = a.erroAbsMolhado - b.erroAbsMolhado;
+    if (errorCompare) return errorCompare;
+    return a.label.localeCompare(b.label);
+  });
+
+  return {
+    forecastRows,
+    missingHours: getMissingControlledHours(forecastRows),
+    realTotals,
+    urResults,
+    dpdResults,
+    rainResults,
+    combinedResults,
+    ranking,
+    best: ranking[0] ?? null,
+  };
+}
+
+function formatFixedNumber(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return Number(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 function formatHours(value) {
-  return value === null || value === undefined ? "-" : `${formatNumber(value, 2)} h`;
+  return value === null || value === undefined ? "-" : `${formatFixedNumber(value, 2)} h`;
 }
 
 function formatHourCount(value) {
@@ -702,32 +831,12 @@ function formatHourCount(value) {
 function formatSignedHours(value) {
   if (value === null || value === undefined) return "-";
   const sign = value > 0 ? "+" : "";
-  return `${sign}${formatNumber(value, 2)} h`;
+  return `${sign}${formatFixedNumber(value, 2)} h`;
 }
 
-function formatDurationWithMinutes(value) {
-  if (value === null || value === undefined) return "-";
-  return `${formatHours(value)} (${formatNumber(value * 60, 1)} min)`;
-}
-
-function formatMetricValue(value, kind) {
-  if (value === null || value === undefined) return "-";
-  if (kind === "rain") return `${formatNumber(value, 1)} mm`;
-  if (kind === "temp") return `${formatNumber(value, 1)} °C`;
-  if (kind === "humidity") return `${formatNumber(value, 0)}%`;
-  if (kind === "duration") return formatHours(value);
-  if (kind === "hours_count") return formatHourCount(value);
-  return formatNumber(value, 1);
-}
-
-function formatMetricDifference(value, kind) {
-  if (value === null || value === undefined) return "-";
-  const sign = value > 0 ? "+" : "";
-  if (kind === "rain") return `${sign}${formatNumber(value, 1)} mm`;
-  if (kind === "temp") return `${sign}${formatNumber(value, 1)} °C`;
-  if (kind === "humidity") return `${sign}${formatNumber(value, 0)}%`;
-  if (kind === "duration" || kind === "hours_count") return formatSignedHours(value);
-  return `${sign}${formatNumber(value, 1)}`;
+function formatDurationWithMinutes(hours) {
+  if (hours === null || hours === undefined) return "-";
+  return `${formatHours(hours)} / ${formatNumber(hours * 60, 1)} min`;
 }
 
 function Pill({ value }) {
@@ -802,17 +911,124 @@ function ThresholdList({ title, rows, suffix, total }) {
   );
 }
 
+function ControlledStatusPill({ status }) {
+  const color =
+    status === "bom" ? C.green : status === "aceitavel" ? "#b45309" : C.red;
+  const background =
+    status === "bom" ? C.greenUltra : status === "aceitavel" ? "#fff7ed" : "#fef2f2";
+
+  return (
+    <span
+      className="inline-flex min-h-6 items-center rounded-full px-2.5 text-[11px] font-black"
+      style={{ background, color }}
+    >
+      {status}
+    </span>
+  );
+}
+
+function ControlledValidationTable({ title, rows, labelHeader = "Limiar" }) {
+  return (
+    <section className="rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
+      <h3 className="mb-3 text-sm font-black" style={{ color: C.textDark }}>
+        {title}
+      </h3>
+      <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
+        <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
+          <thead style={{ background: C.panelBg }}>
+            <tr>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">{labelHeader}</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Regra</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Horas estimadas</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro vs molhado real</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro absoluto</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro vs umido real</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro abs umido</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Status</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Horas marcadas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t" style={{ borderColor: C.border }}>
+                <td className="px-3 py-2 font-semibold">{row.label}</td>
+                <td className="px-3 py-2 text-slate-600">{row.rule}</td>
+                <td className="px-3 py-2 font-black" style={{ color: C.green }}>
+                  {formatHours(row.horasEstimadas)}
+                </td>
+                <td className="px-3 py-2">{formatSignedHours(row.erroMolhado)}</td>
+                <td className="px-3 py-2">{formatHours(row.erroAbsMolhado)}</td>
+                <td className="px-3 py-2">{formatSignedHours(row.erroUmido)}</td>
+                <td className="px-3 py-2">{formatHours(row.erroAbsUmido)}</td>
+                <td className="px-3 py-2">
+                  <ControlledStatusPill status={row.status} />
+                </td>
+                <td className="px-3 py-2 text-xs text-slate-600">
+                  {row.horasMarcadas.length ? row.horasMarcadas.join(", ") : "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ControlledRanking({ ranking }) {
+  return (
+    <section className="rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
+      <h3 className="mb-3 text-sm font-black" style={{ color: C.textDark }}>
+        Ranking geral
+      </h3>
+      <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
+        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+          <thead style={{ background: C.panelBg }}>
+            <tr>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Ranking</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Metodo</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Regra</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Horas estimadas</th>
+              <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro absoluto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranking.map((row, index) => {
+              const best = index === 0;
+              return (
+                <tr
+                  key={`${row.id}-rank`}
+                  className="border-t"
+                  style={{
+                    borderColor: C.border,
+                    background: best ? C.greenUltra : C.white,
+                  }}
+                >
+                  <td className="px-3 py-2 font-black">{index + 1}</td>
+                  <td className="px-3 py-2 font-semibold">
+                    {best ? "Melhor metodo para este dia: " : ""}
+                    {row.method}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">{row.rule}</td>
+                  <td className="px-3 py-2 font-black" style={{ color: C.green }}>
+                    {formatHours(row.horasEstimadas)}
+                  </td>
+                  <td className="px-3 py-2">{formatHours(row.erroAbsMolhado)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export default function CalculoTeste() {
   const [jsonText, setJsonText] = useState(JSON.stringify(sampleJson, null, 2));
   const [parsedJson, setParsedJson] = useState(sampleJson);
   const [message, setMessage] = useState({ text: "Exemplo carregado.", type: "ok" });
   const [selectedDay, setSelectedDay] = useState("");
-  const [bancoText, setBancoText] = useState("");
-  const [bancoRegistros, setBancoRegistros] = useState([]);
-  const [bancoMessage, setBancoMessage] = useState({
-    text: "Entrada opcional. Nenhum JSON do banco carregado.",
-    type: "",
-  });
 
   const result = useMemo(() => {
     try {
@@ -847,24 +1063,11 @@ export default function CalculoTeste() {
     };
   }, [dayTabs, result, selectedDay]);
 
-  const bancoPorDia = useMemo(() => agruparPorDiaLocal(bancoRegistros), [bancoRegistros]);
-  const bancoRegistrosDoDia = useMemo(
-    () => (selectedDay ? bancoPorDia.get(selectedDay) ?? [] : []),
-    [bancoPorDia, selectedDay],
-  );
-  const bancoCarregado = bancoRegistros.length > 0;
   const metricasEstacaoDia = useMemo(
     () => calcularMetricasReais(selectedDayResult?.rows ?? []),
     [selectedDayResult],
   );
-  const metricasBancoDia = useMemo(
-    () => (bancoCarregado ? calcularMetricasReais(bancoRegistrosDoDia) : null),
-    [bancoCarregado, bancoRegistrosDoDia],
-  );
-  const comparacaoEstacaoBanco = useMemo(
-    () => compararEstacaoComBanco(metricasEstacaoDia, metricasBancoDia),
-    [metricasBancoDia, metricasEstacaoDia],
-  );
+
   const validationRows = useMemo(() => {
     const methods = (selectedDayResult?.methods ?? []).filter(
       (method) => method.wetHours !== null,
@@ -873,20 +1076,22 @@ export default function CalculoTeste() {
     return methods.flatMap((method) =>
       SENSOR_REAL_ROWS.map((sensor) => {
         const estacao = metricasEstacaoDia?.[sensor.occurrenceKey] ?? null;
-        const banco = metricasBancoDia?.[sensor.occurrenceKey] ?? null;
 
         return {
           key: `${method.method}-${sensor.key}`,
           method: `${method.method} / ${sensor.label}`,
           estimated: method.wetHours,
           estacao,
-          banco,
           erroEstacao: estacao !== null ? method.wetHours - estacao : null,
-          erroBanco: banco !== null ? method.wetHours - banco : null,
         };
       }),
     );
-  }, [metricasBancoDia, metricasEstacaoDia, selectedDayResult]);
+  }, [metricasEstacaoDia, selectedDayResult]);
+
+  const controlledValidation = useMemo(
+    () => buildControlledValidation(result?.rows ?? []),
+    [result],
+  );
 
   const local = parsedJson?.local;
   const localLabel = [local?.nome, local?.estado].filter(Boolean).join(" - ") || "-";
@@ -967,70 +1172,6 @@ export default function CalculoTeste() {
       });
     } catch (error) {
       setMessage({ text: `JSON invalido: ${error.message}`, type: "error" });
-    }
-  };
-
-  const handleLoadBanco = () => {
-    if (!bancoText.trim()) {
-      setBancoRegistros([]);
-      setBancoMessage({
-        text: "Entrada opcional. Nenhum JSON do banco carregado.",
-        type: "",
-      });
-      return;
-    }
-
-    try {
-      const json = JSON.parse(bancoText);
-      const registros = normalizarJsonBanco(json);
-
-      if (!registros.length) {
-        setBancoRegistros([]);
-        setBancoMessage({
-          text: "JSON do banco lido, mas nenhum registro com data_hora valida foi encontrado.",
-          type: "error",
-        });
-        return;
-      }
-
-      setBancoRegistros(registros);
-      setBancoMessage({
-        text: `JSON do banco carregado com ${registros.length} registro(s) valido(s).`,
-        type: "ok",
-      });
-    } catch (error) {
-      setBancoRegistros([]);
-      setBancoMessage({ text: `JSON do banco invalido: ${error.message}`, type: "error" });
-    }
-  };
-
-  const handleBancoFile = async (event) => {
-    const [file] = event.target.files;
-    if (!file) return;
-    const text = await file.text();
-    setBancoText(text);
-
-    try {
-      const json = JSON.parse(text);
-      const registros = normalizarJsonBanco(json);
-
-      if (!registros.length) {
-        setBancoRegistros([]);
-        setBancoMessage({
-          text: `Arquivo ${file.name} nao tem registros com data_hora valida.`,
-          type: "error",
-        });
-        return;
-      }
-
-      setBancoRegistros(registros);
-      setBancoMessage({
-        text: `Arquivo do banco carregado: ${file.name} (${registros.length} registro(s)).`,
-        type: "ok",
-      });
-    } catch (error) {
-      setBancoRegistros([]);
-      setBancoMessage({ text: `JSON do banco invalido: ${error.message}`, type: "error" });
     }
   };
 
@@ -1175,75 +1316,6 @@ export default function CalculoTeste() {
               className="min-h-[520px] w-full resize-y rounded-md border bg-slate-50 p-3 font-mono text-xs leading-relaxed outline-none focus:ring-4 md:text-sm"
               style={{ borderColor: C.border, color: C.textDark, "--tw-ring-color": C.greenPale }}
             />
-
-            <div className="mt-4 rounded-lg border p-3" style={{ borderColor: C.border, background: C.panelBg }}>
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-sm font-black" style={{ color: C.textDark }}>
-                    JSON do banco
-                  </h2>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    Os dados do banco sao usados como referencia adicional para validar se o painel esta lendo corretamente os registros reais da estacao. Os sensores fisicos registram minutos dentro da hora; por isso o painel mostra ocorrencia por hora e duracao real separadamente.
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <label
-                    className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs font-bold"
-                    style={{ borderColor: C.border, background: C.white, color: C.green }}
-                  >
-                    <Upload size={14} />
-                    Banco
-                    <input className="hidden" type="file" accept=".json,application/json" onChange={handleBancoFile} />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleLoadBanco}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-xs font-black text-white"
-                    style={{ background: C.green }}
-                  >
-                    <ClipboardCheck size={14} />
-                    Carregar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBancoText("");
-                      setBancoRegistros([]);
-                      setBancoMessage({
-                        text: "Entrada opcional. Nenhum JSON do banco carregado.",
-                        type: "",
-                      });
-                    }}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-xs font-bold"
-                    style={{ borderColor: C.border, background: C.white, color: C.textDark }}
-                  >
-                    <Trash2 size={14} />
-                    Limpar
-                  </button>
-                </div>
-              </div>
-              <textarea
-                value={bancoText}
-                onChange={(event) => setBancoText(event.target.value)}
-                spellCheck={false}
-                placeholder='Cole aqui o array do banco ou o objeto exportado pelo SQL, exemplo: { "WITH ...": [...] }'
-                className="min-h-[180px] w-full resize-y rounded-md border bg-white p-3 font-mono text-xs leading-relaxed outline-none focus:ring-4"
-                style={{ borderColor: C.border, color: C.textDark, "--tw-ring-color": C.greenPale }}
-              />
-              <p
-                className="mt-2 text-xs font-bold"
-                style={{
-                  color:
-                    bancoMessage.type === "error"
-                      ? C.red
-                      : bancoMessage.type === "ok"
-                        ? C.green
-                        : "#6b7280",
-                }}
-              >
-                {bancoMessage.text}
-              </p>
-            </div>
           </div>
 
           <div className="space-y-4">
@@ -1316,15 +1388,13 @@ export default function CalculoTeste() {
             </h2>
           </div>
           <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
-            <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
               <thead style={{ background: C.panelBg }}>
                 <tr>
                   <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Metodo</th>
                   <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estimado atual</th>
                   <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Sensor/estacao atual</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco</th>
                   <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro vs estacao</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro vs banco</th>
                 </tr>
               </thead>
               <tbody>
@@ -1335,9 +1405,7 @@ export default function CalculoTeste() {
                       {formatHourCount(row.estimated)}
                     </td>
                     <td className="px-3 py-2">{formatHourCount(row.estacao)}</td>
-                    <td className="px-3 py-2">{formatHourCount(row.banco)}</td>
                     <td className="px-3 py-2">{formatSignedHours(row.erroEstacao)}</td>
-                    <td className="px-3 py-2">{formatSignedHours(row.erroBanco)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1353,101 +1421,150 @@ export default function CalculoTeste() {
             </h2>
           </div>
           <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
-            <table className="w-full min-w-[780px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[680px] border-collapse text-left text-sm">
               <thead style={{ background: C.panelBg }}>
                 <tr>
                   <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Metodo real</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estacao atual ocorrencia</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estacao atual duracao</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco ocorrencia</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco duracao</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Diferenca</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Ocorrencia</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Duracao real</th>
                 </tr>
               </thead>
               <tbody>
-                {SENSOR_REAL_ROWS.map((sensor) => {
-                  const estacaoDuracao = metricasEstacaoDia?.[sensor.durationKey] ?? null;
-                  const bancoDuracao = metricasBancoDia?.[sensor.durationKey] ?? null;
-                  const diferenca =
-                    estacaoDuracao !== null && bancoDuracao !== null
-                      ? bancoDuracao - estacaoDuracao
-                      : null;
-
-                  return (
-                    <tr key={sensor.key} className="border-t" style={{ borderColor: C.border }}>
-                      <td className="px-3 py-2 font-semibold">{sensor.label}</td>
-                      <td className="px-3 py-2">
-                        {formatHourCount(metricasEstacaoDia?.[sensor.occurrenceKey] ?? null)}
-                      </td>
-                      <td className="px-3 py-2">
-                        {formatDurationWithMinutes(metricasEstacaoDia?.[sensor.durationKey] ?? null)}
-                      </td>
-                      <td className="px-3 py-2">
-                        {formatHourCount(metricasBancoDia?.[sensor.occurrenceKey] ?? null)}
-                      </td>
-                      <td className="px-3 py-2">
-                        {formatDurationWithMinutes(metricasBancoDia?.[sensor.durationKey] ?? null)}
-                      </td>
-                      <td className="px-3 py-2">{formatSignedHours(diferenca)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="mt-4 rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
-          <div className="mb-3 flex items-center gap-2">
-            <Table2 size={18} style={{ color: C.green }} />
-            <h2 className="text-sm font-black" style={{ color: C.textDark }}>
-              Comparacao estacao x banco
-            </h2>
-          </div>
-          <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
-            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-              <thead style={{ background: C.panelBg }}>
-                <tr>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Metrica</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estacao atual</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Diferenca</th>
-                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparacaoEstacaoBanco.map((row) => (
-                  <tr key={row.key} className="border-t" style={{ borderColor: C.border }}>
-                    <td className="px-3 py-2 font-semibold">{row.label}</td>
-                    <td className="px-3 py-2">{formatMetricValue(row.estacao, row.kind)}</td>
-                    <td className="px-3 py-2">{formatMetricValue(row.banco, row.kind)}</td>
-                    <td className="px-3 py-2">{formatMetricDifference(row.diferenca, row.kind)}</td>
+                {SENSOR_REAL_ROWS.map((sensor) => (
+                  <tr key={sensor.key} className="border-t" style={{ borderColor: C.border }}>
+                    <td className="px-3 py-2 font-semibold">{sensor.label}</td>
                     <td className="px-3 py-2">
-                      <span
-                        className="inline-flex min-h-6 items-center rounded-full px-2.5 text-[11px] font-black"
-                        style={{
-                          background:
-                            row.status === "OK"
-                              ? C.greenUltra
-                              : row.status === "Divergente"
-                                ? "#fef2f2"
-                                : "#f1f3f5",
-                          color:
-                            row.status === "OK"
-                              ? C.green
-                              : row.status === "Divergente"
-                                ? C.red
-                                : "#6b7280",
-                        }}
-                      >
-                        {row.status}
-                      </span>
+                      {formatHourCount(metricasEstacaoDia?.[sensor.occurrenceKey] ?? null)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {formatDurationWithMinutes(metricasEstacaoDia?.[sensor.durationKey] ?? null)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="mt-4 rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <ClipboardCheck size={18} style={{ color: C.green }} />
+                <h2 className="text-sm font-black" style={{ color: C.textDark }}>
+                  VALIDAÇÃO CONTROLADA — DIA 14/05/2026
+                </h2>
+              </div>
+              <p className="mt-2 max-w-4xl text-xs leading-relaxed text-slate-600">
+                Dados reais fixos da estação {CONTROLLED_STATION_ID}, {CONTROLLED_SENSOR_LABEL}.
+                A referencia principal usa molhado_min; umido_min aparece como alternativa porque soma molhado e contaminado.
+              </p>
+            </div>
+            <span
+              className="inline-flex min-h-8 items-center rounded-full px-3 text-xs font-black"
+              style={{
+                background: controlledValidation.missingHours.length ? "#fff7ed" : C.greenUltra,
+                color: controlledValidation.missingHours.length ? "#c2410c" : C.green,
+              }}
+            >
+              {controlledValidation.forecastRows.length} h de previsao em {CONTROLLED_DAY}
+            </span>
+          </div>
+
+          <div className="mb-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border p-4" style={{ borderColor: C.border, background: C.panelBg }}>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Molhado real</p>
+              <p className="mt-1 text-xl font-black" style={{ color: C.green }}>
+                {formatHours(controlledValidation.realTotals.molhadoHoras)} /{" "}
+                {formatNumber(controlledValidation.realTotals.molhadoMin, 1)} min
+              </p>
+              <p className="mt-1 text-xs text-slate-600">
+                Ocorrencia: {controlledValidation.realTotals.ocorrenciaMolhado} h
+              </p>
+            </div>
+            <div className="rounded-lg border p-4" style={{ borderColor: C.border, background: C.panelBg }}>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Umido real</p>
+              <p className="mt-1 text-xl font-black" style={{ color: C.green }}>
+                {formatHours(controlledValidation.realTotals.umidoHoras)} /{" "}
+                {formatNumber(controlledValidation.realTotals.umidoMin, 1)} min
+              </p>
+              <p className="mt-1 text-xs text-slate-600">
+                Ocorrencia: {controlledValidation.realTotals.ocorrenciaUmido} h
+              </p>
+            </div>
+            <div className="rounded-lg border p-4" style={{ borderColor: C.border, background: C.panelBg }}>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Horas analisadas</p>
+              <p className="mt-1 text-xl font-black" style={{ color: C.green }}>
+                {controlledValidation.realTotals.horasAnalisadas}
+              </p>
+              <p className="mt-1 text-xs text-slate-600">
+                Dados reais agregados de registros de 15 minutos.
+              </p>
+            </div>
+          </div>
+
+          {controlledValidation.forecastRows.length === 0 && (
+            <div className="rounded-lg border p-3 text-sm font-semibold" style={{ borderColor: C.border, background: "#fff7ed", color: "#9a3412" }}>
+              Cole no campo de entrada JSON os dados de previsão do dia 14/05/2026 para comparar os metodos.
+            </div>
+          )}
+
+          {controlledValidation.forecastRows.length > 0 && controlledValidation.missingHours.length > 0 && (
+            <div className="mb-4 rounded-lg border p-3 text-sm font-semibold" style={{ borderColor: C.border, background: "#fff7ed", color: "#9a3412" }}>
+              Previsão incompleta para o dia 14. Horas ausentes:{" "}
+              {controlledValidation.missingHours.map((hour) => `${String(hour).padStart(2, "0")}:00`).join(", ")}.
+            </div>
+          )}
+
+          {controlledValidation.forecastRows.length > 0 && (
+            <div className="space-y-4">
+              <div
+                className="rounded-lg border p-4"
+                style={{
+                  borderColor: C.border,
+                  background:
+                    controlledValidation.best?.status === "ruim" ? "#fef2f2" : C.greenUltra,
+                }}
+              >
+                <p
+                  className="text-[10px] font-black uppercase tracking-wide"
+                  style={{ color: controlledValidation.best?.status === "ruim" ? C.red : C.green }}
+                >
+                  Melhor metodo para este dia
+                </p>
+                <p className="mt-1 text-base font-black" style={{ color: C.textDark }}>
+                  {controlledValidation.best?.method} - {controlledValidation.best?.rule}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">
+                  {formatHours(controlledValidation.best?.horasEstimadas)} estimadas; erro absoluto de{" "}
+                  {formatHours(controlledValidation.best?.erroAbsMolhado)} contra molhado real.
+                </p>
+                {controlledValidation.best?.status === "ruim" && (
+                  <p className="mt-2 text-sm font-bold" style={{ color: C.red }}>
+                    Todos os metodos testados ficaram com erro absoluto acima de 2 h para este dia.
+                  </p>
+                )}
+              </div>
+              <ControlledRanking ranking={controlledValidation.ranking} />
+              <ControlledValidationTable
+                title="UR calibrada 80-90%"
+                rows={controlledValidation.urResults}
+              />
+              <ControlledValidationTable
+                title="DPD calibrado"
+                rows={controlledValidation.dpdResults}
+              />
+              <ControlledValidationTable
+                title="Chuva direta"
+                rows={controlledValidation.rainResults}
+              />
+              <ControlledValidationTable
+                title="Modelos combinados"
+                rows={controlledValidation.combinedResults}
+                labelHeader="Modelo"
+              />
+            </div>
+          )}
         </section>
 
         <section className="mt-4 rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
