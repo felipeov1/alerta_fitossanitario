@@ -296,6 +296,7 @@ function normalizeRows(json) {
       temperatura !== null && pontoOrvalho !== null ? temperatura - pontoOrvalho : null;
     const dpd = dpdFromTemp ?? firstNumber(raw.dpd_c);
     const vento = firstNumber(raw.vento_ms, raw.vento_velocidade_ms);
+    const localParts = date ? localDateParts(date) : null;
     const missing = [];
 
     if (!timeValue || !date) missing.push("data_hora");
@@ -309,12 +310,20 @@ function normalizeRows(json) {
       source: raw,
       timeValue,
       date,
+      data_hora_local: localParts?.label ?? null,
+      dia_local: localParts?.date ?? null,
+      estacao_id: raw.estacao_id ?? null,
       temperatura,
       umidade,
       pontoOrvalho,
       precipitacao,
       dpd,
       vento,
+      pressao_hpa: firstNumber(raw.pressao_hpa),
+      molfoliar_1m_molhado: firstNumber(raw.molfoliar_1m_molhado),
+      molfoliar_1m_condensacao: firstNumber(raw.molfoliar_1m_condensacao),
+      molfoliar_2m_molhado: firstNumber(raw.molfoliar_2m_molhado),
+      molfoliar_2m_condensacao: firstNumber(raw.molfoliar_2m_condensacao),
       missing,
       valid: missing.length === 0,
     };
@@ -454,6 +463,273 @@ function groupRowsByDay(rows) {
   }));
 }
 
+function normalizarJsonBanco(input) {
+  const registrosBrutos = Array.isArray(input)
+    ? input
+    : Object.values(input ?? {}).find((value) => Array.isArray(value));
+
+  if (!Array.isArray(registrosBrutos)) {
+    throw new Error("Informe uma lista de registros ou um objeto com uma propriedade que contenha uma lista.");
+  }
+
+  return registrosBrutos
+    .map((registro, index) => {
+      if (!registro?.data_hora) return null;
+
+      const date = parseDate(registro.data_hora);
+      if (!date) return null;
+
+      const parts = localDateParts(date);
+      return {
+        ...registro,
+        index,
+        date,
+        data_hora_local: parts.label,
+        dia_local: parts.date,
+        estacao_id: registro.estacao_id ?? null,
+        temperatura: firstNumber(registro.temperatura_c),
+        umidade: firstNumber(registro.umidade_relativa),
+        pontoOrvalho: firstNumber(registro.ponto_orvalho_c),
+        precipitacao: firstNumber(registro.precipitacao_mm, registro.chuva_mm),
+        vento: firstNumber(registro.vento_ms),
+        pressao_hpa: firstNumber(registro.pressao_hpa),
+        molfoliar_1m_molhado: firstNumber(registro.molfoliar_1m_molhado),
+        molfoliar_1m_condensacao: firstNumber(registro.molfoliar_1m_condensacao),
+        molfoliar_2m_molhado: firstNumber(registro.molfoliar_2m_molhado),
+        molfoliar_2m_condensacao: firstNumber(registro.molfoliar_2m_condensacao),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date - b.date);
+}
+
+function agruparPorDiaLocal(registros) {
+  const agrupado = new Map();
+
+  registros.forEach((registro) => {
+    const dia =
+      registro.dia_local ??
+      (registro.date ? localDateParts(registro.date).date : null);
+    if (!dia) return;
+
+    if (!agrupado.has(dia)) {
+      agrupado.set(dia, []);
+    }
+    agrupado.get(dia).push(registro);
+  });
+
+  return agrupado;
+}
+
+function valorRegistro(registro, ...chaves) {
+  for (const chave of chaves) {
+    const valor = firstNumber(registro?.[chave], registro?.source?.[chave]);
+    if (valor !== null) return valor;
+  }
+  return null;
+}
+
+function valoresNumericos(registros, ...chaves) {
+  return registros
+    .map((registro) => valorRegistro(registro, ...chaves))
+    .filter((valor) => valor !== null);
+}
+
+function minOrNull(valores) {
+  return valores.length ? Math.min(...valores) : null;
+}
+
+function maxOrNull(valores) {
+  return valores.length ? Math.max(...valores) : null;
+}
+
+function sumOrNull(valores) {
+  return valores.length ? valores.reduce((total, valor) => total + valor, 0) : null;
+}
+
+function calcularSensor(registros, molhadoKey, condensacaoKey = null) {
+  const minutosPorHora = registros
+    .map((registro) => {
+      const molhado = valorRegistro(registro, molhadoKey);
+      const condensacao = condensacaoKey ? valorRegistro(registro, condensacaoKey) : null;
+
+      if (molhado === null && condensacao === null) return null;
+      return (molhado ?? 0) + (condensacao ?? 0);
+    })
+    .filter((valor) => valor !== null);
+
+  if (!minutosPorHora.length) {
+    return { ocorrencia: null, duracao: null, minutos: null };
+  }
+
+  return {
+    ocorrencia: minutosPorHora.filter((valor) => valor > 0).length,
+    duracao: minutosPorHora.reduce((total, valor) => total + valor, 0) / 60,
+    minutos: minutosPorHora.reduce((total, valor) => total + valor, 0),
+  };
+}
+
+function calcularMetricasReais(registrosDoDia) {
+  const temperaturas = valoresNumericos(registrosDoDia, "temperatura", "temperatura_c");
+  const umidades = valoresNumericos(registrosDoDia, "umidade", "umidade_relativa");
+  const chuvas = valoresNumericos(registrosDoDia, "precipitacao", "precipitacao_mm", "chuva_mm");
+
+  const sensor1mMolhado = calcularSensor(registrosDoDia, "molfoliar_1m_molhado");
+  const sensor1mUmido = calcularSensor(
+    registrosDoDia,
+    "molfoliar_1m_molhado",
+    "molfoliar_1m_condensacao",
+  );
+  const sensor2mMolhado = calcularSensor(registrosDoDia, "molfoliar_2m_molhado");
+  const sensor2mUmido = calcularSensor(
+    registrosDoDia,
+    "molfoliar_2m_molhado",
+    "molfoliar_2m_condensacao",
+  );
+
+  return {
+    total_horas: registrosDoDia.length,
+    chuva_total_mm: sumOrNull(chuvas) ?? 0,
+    temp_min: minOrNull(temperaturas),
+    temp_max: maxOrNull(temperaturas),
+    umidade_min: minOrNull(umidades),
+    umidade_max: maxOrNull(umidades),
+    ocorrencia_1m_molhado: sensor1mMolhado.ocorrencia,
+    duracao_1m_molhado: sensor1mMolhado.duracao,
+    minutos_1m_molhado: sensor1mMolhado.minutos,
+    ocorrencia_1m_umido: sensor1mUmido.ocorrencia,
+    duracao_1m_umido: sensor1mUmido.duracao,
+    minutos_1m_umido: sensor1mUmido.minutos,
+    ocorrencia_2m_molhado: sensor2mMolhado.ocorrencia,
+    duracao_2m_molhado: sensor2mMolhado.duracao,
+    minutos_2m_molhado: sensor2mMolhado.minutos,
+    ocorrencia_2m_umido: sensor2mUmido.ocorrencia,
+    duracao_2m_umido: sensor2mUmido.duracao,
+    minutos_2m_umido: sensor2mUmido.minutos,
+  };
+}
+
+const COMPARACOES_ESTACAO_BANCO = [
+  { key: "total_horas", label: "Total de horas", threshold: 1, kind: "hours_count" },
+  { key: "chuva_total_mm", label: "Chuva total", threshold: 0.1, kind: "rain" },
+  { key: "temp_min", label: "Temp min", threshold: 0.1, kind: "temp" },
+  { key: "temp_max", label: "Temp max", threshold: 0.1, kind: "temp" },
+  { key: "umidade_min", label: "Umidade min", threshold: 1, kind: "humidity" },
+  { key: "umidade_max", label: "Umidade max", threshold: 1, kind: "humidity" },
+  {
+    key: "ocorrencia_1m_molhado",
+    label: "Sensor 1m molhado ocorrencia",
+    threshold: 1,
+    kind: "hours_count",
+  },
+  {
+    key: "duracao_1m_molhado",
+    label: "Sensor 1m molhado duracao real",
+    threshold: 0.1,
+    kind: "duration",
+  },
+  {
+    key: "ocorrencia_2m_molhado",
+    label: "Sensor 2m molhado ocorrencia",
+    threshold: 1,
+    kind: "hours_count",
+  },
+  {
+    key: "duracao_2m_molhado",
+    label: "Sensor 2m molhado duracao real",
+    threshold: 0.1,
+    kind: "duration",
+  },
+];
+
+function compararEstacaoComBanco(metricasEstacao, metricasBanco) {
+  return COMPARACOES_ESTACAO_BANCO.map((comparacao) => {
+    const estacao = metricasEstacao?.[comparacao.key] ?? null;
+    const banco = metricasBanco?.[comparacao.key] ?? null;
+    const diferenca = estacao !== null && banco !== null ? banco - estacao : null;
+    const status =
+      diferenca === null
+        ? "-"
+        : Math.abs(diferenca) >= comparacao.threshold
+          ? "Divergente"
+          : "OK";
+
+    return {
+      ...comparacao,
+      estacao,
+      banco,
+      diferenca,
+      status,
+    };
+  });
+}
+
+const SENSOR_REAL_ROWS = [
+  {
+    key: "1m_molhado",
+    label: "Sensor 1m - Molhado",
+    occurrenceKey: "ocorrencia_1m_molhado",
+    durationKey: "duracao_1m_molhado",
+  },
+  {
+    key: "1m_umido",
+    label: "Sensor 1m - Molhado + condensacao",
+    occurrenceKey: "ocorrencia_1m_umido",
+    durationKey: "duracao_1m_umido",
+  },
+  {
+    key: "2m_molhado",
+    label: "Sensor 2m - Molhado",
+    occurrenceKey: "ocorrencia_2m_molhado",
+    durationKey: "duracao_2m_molhado",
+  },
+  {
+    key: "2m_umido",
+    label: "Sensor 2m - Molhado + condensacao",
+    occurrenceKey: "ocorrencia_2m_umido",
+    durationKey: "duracao_2m_umido",
+  },
+];
+
+function formatHours(value) {
+  return value === null || value === undefined ? "-" : `${formatNumber(value, 2)} h`;
+}
+
+function formatHourCount(value) {
+  return value === null || value === undefined ? "-" : `${formatNumber(value, 0)} h`;
+}
+
+function formatSignedHours(value) {
+  if (value === null || value === undefined) return "-";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatNumber(value, 2)} h`;
+}
+
+function formatDurationWithMinutes(value) {
+  if (value === null || value === undefined) return "-";
+  return `${formatHours(value)} (${formatNumber(value * 60, 1)} min)`;
+}
+
+function formatMetricValue(value, kind) {
+  if (value === null || value === undefined) return "-";
+  if (kind === "rain") return `${formatNumber(value, 1)} mm`;
+  if (kind === "temp") return `${formatNumber(value, 1)} °C`;
+  if (kind === "humidity") return `${formatNumber(value, 0)}%`;
+  if (kind === "duration") return formatHours(value);
+  if (kind === "hours_count") return formatHourCount(value);
+  return formatNumber(value, 1);
+}
+
+function formatMetricDifference(value, kind) {
+  if (value === null || value === undefined) return "-";
+  const sign = value > 0 ? "+" : "";
+  if (kind === "rain") return `${sign}${formatNumber(value, 1)} mm`;
+  if (kind === "temp") return `${sign}${formatNumber(value, 1)} °C`;
+  if (kind === "humidity") return `${sign}${formatNumber(value, 0)}%`;
+  if (kind === "duration" || kind === "hours_count") return formatSignedHours(value);
+  return `${sign}${formatNumber(value, 1)}`;
+}
+
 function Pill({ value }) {
   return (
     <span
@@ -531,6 +807,12 @@ export default function CalculoTeste() {
   const [parsedJson, setParsedJson] = useState(sampleJson);
   const [message, setMessage] = useState({ text: "Exemplo carregado.", type: "ok" });
   const [selectedDay, setSelectedDay] = useState("");
+  const [bancoText, setBancoText] = useState("");
+  const [bancoRegistros, setBancoRegistros] = useState([]);
+  const [bancoMessage, setBancoMessage] = useState({
+    text: "Entrada opcional. Nenhum JSON do banco carregado.",
+    type: "",
+  });
 
   const result = useMemo(() => {
     try {
@@ -564,6 +846,47 @@ export default function CalculoTeste() {
       ...buildResultForRows(rows),
     };
   }, [dayTabs, result, selectedDay]);
+
+  const bancoPorDia = useMemo(() => agruparPorDiaLocal(bancoRegistros), [bancoRegistros]);
+  const bancoRegistrosDoDia = useMemo(
+    () => (selectedDay ? bancoPorDia.get(selectedDay) ?? [] : []),
+    [bancoPorDia, selectedDay],
+  );
+  const bancoCarregado = bancoRegistros.length > 0;
+  const metricasEstacaoDia = useMemo(
+    () => calcularMetricasReais(selectedDayResult?.rows ?? []),
+    [selectedDayResult],
+  );
+  const metricasBancoDia = useMemo(
+    () => (bancoCarregado ? calcularMetricasReais(bancoRegistrosDoDia) : null),
+    [bancoCarregado, bancoRegistrosDoDia],
+  );
+  const comparacaoEstacaoBanco = useMemo(
+    () => compararEstacaoComBanco(metricasEstacaoDia, metricasBancoDia),
+    [metricasBancoDia, metricasEstacaoDia],
+  );
+  const validationRows = useMemo(() => {
+    const methods = (selectedDayResult?.methods ?? []).filter(
+      (method) => method.wetHours !== null,
+    );
+
+    return methods.flatMap((method) =>
+      SENSOR_REAL_ROWS.map((sensor) => {
+        const estacao = metricasEstacaoDia?.[sensor.occurrenceKey] ?? null;
+        const banco = metricasBancoDia?.[sensor.occurrenceKey] ?? null;
+
+        return {
+          key: `${method.method}-${sensor.key}`,
+          method: `${method.method} / ${sensor.label}`,
+          estimated: method.wetHours,
+          estacao,
+          banco,
+          erroEstacao: estacao !== null ? method.wetHours - estacao : null,
+          erroBanco: banco !== null ? method.wetHours - banco : null,
+        };
+      }),
+    );
+  }, [metricasBancoDia, metricasEstacaoDia, selectedDayResult]);
 
   const local = parsedJson?.local;
   const localLabel = [local?.nome, local?.estado].filter(Boolean).join(" - ") || "-";
@@ -644,6 +967,70 @@ export default function CalculoTeste() {
       });
     } catch (error) {
       setMessage({ text: `JSON invalido: ${error.message}`, type: "error" });
+    }
+  };
+
+  const handleLoadBanco = () => {
+    if (!bancoText.trim()) {
+      setBancoRegistros([]);
+      setBancoMessage({
+        text: "Entrada opcional. Nenhum JSON do banco carregado.",
+        type: "",
+      });
+      return;
+    }
+
+    try {
+      const json = JSON.parse(bancoText);
+      const registros = normalizarJsonBanco(json);
+
+      if (!registros.length) {
+        setBancoRegistros([]);
+        setBancoMessage({
+          text: "JSON do banco lido, mas nenhum registro com data_hora valida foi encontrado.",
+          type: "error",
+        });
+        return;
+      }
+
+      setBancoRegistros(registros);
+      setBancoMessage({
+        text: `JSON do banco carregado com ${registros.length} registro(s) valido(s).`,
+        type: "ok",
+      });
+    } catch (error) {
+      setBancoRegistros([]);
+      setBancoMessage({ text: `JSON do banco invalido: ${error.message}`, type: "error" });
+    }
+  };
+
+  const handleBancoFile = async (event) => {
+    const [file] = event.target.files;
+    if (!file) return;
+    const text = await file.text();
+    setBancoText(text);
+
+    try {
+      const json = JSON.parse(text);
+      const registros = normalizarJsonBanco(json);
+
+      if (!registros.length) {
+        setBancoRegistros([]);
+        setBancoMessage({
+          text: `Arquivo ${file.name} nao tem registros com data_hora valida.`,
+          type: "error",
+        });
+        return;
+      }
+
+      setBancoRegistros(registros);
+      setBancoMessage({
+        text: `Arquivo do banco carregado: ${file.name} (${registros.length} registro(s)).`,
+        type: "ok",
+      });
+    } catch (error) {
+      setBancoRegistros([]);
+      setBancoMessage({ text: `JSON do banco invalido: ${error.message}`, type: "error" });
     }
   };
 
@@ -788,6 +1175,75 @@ export default function CalculoTeste() {
               className="min-h-[520px] w-full resize-y rounded-md border bg-slate-50 p-3 font-mono text-xs leading-relaxed outline-none focus:ring-4 md:text-sm"
               style={{ borderColor: C.border, color: C.textDark, "--tw-ring-color": C.greenPale }}
             />
+
+            <div className="mt-4 rounded-lg border p-3" style={{ borderColor: C.border, background: C.panelBg }}>
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-black" style={{ color: C.textDark }}>
+                    JSON do banco
+                  </h2>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    Os dados do banco sao usados como referencia adicional para validar se o painel esta lendo corretamente os registros reais da estacao. Os sensores fisicos registram minutos dentro da hora; por isso o painel mostra ocorrencia por hora e duracao real separadamente.
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <label
+                    className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs font-bold"
+                    style={{ borderColor: C.border, background: C.white, color: C.green }}
+                  >
+                    <Upload size={14} />
+                    Banco
+                    <input className="hidden" type="file" accept=".json,application/json" onChange={handleBancoFile} />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleLoadBanco}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-xs font-black text-white"
+                    style={{ background: C.green }}
+                  >
+                    <ClipboardCheck size={14} />
+                    Carregar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBancoText("");
+                      setBancoRegistros([]);
+                      setBancoMessage({
+                        text: "Entrada opcional. Nenhum JSON do banco carregado.",
+                        type: "",
+                      });
+                    }}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-xs font-bold"
+                    style={{ borderColor: C.border, background: C.white, color: C.textDark }}
+                  >
+                    <Trash2 size={14} />
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <textarea
+                value={bancoText}
+                onChange={(event) => setBancoText(event.target.value)}
+                spellCheck={false}
+                placeholder='Cole aqui o array do banco ou o objeto exportado pelo SQL, exemplo: { "WITH ...": [...] }'
+                className="min-h-[180px] w-full resize-y rounded-md border bg-white p-3 font-mono text-xs leading-relaxed outline-none focus:ring-4"
+                style={{ borderColor: C.border, color: C.textDark, "--tw-ring-color": C.greenPale }}
+              />
+              <p
+                className="mt-2 text-xs font-bold"
+                style={{
+                  color:
+                    bancoMessage.type === "error"
+                      ? C.red
+                      : bancoMessage.type === "ok"
+                        ? C.green
+                        : "#6b7280",
+                }}
+              >
+                {bancoMessage.text}
+              </p>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -849,6 +1305,148 @@ export default function CalculoTeste() {
                 total={selectedDayResult?.rows.length ?? 0}
               />
             </div>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
+          <div className="mb-3 flex items-center gap-2">
+            <ClipboardCheck size={18} style={{ color: C.green }} />
+            <h2 className="text-sm font-black" style={{ color: C.textDark }}>
+              Validacao por ocorrencia dos metodos estimados
+            </h2>
+          </div>
+          <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
+            <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+              <thead style={{ background: C.panelBg }}>
+                <tr>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Metodo</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estimado atual</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Sensor/estacao atual</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro vs estacao</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Erro vs banco</th>
+                </tr>
+              </thead>
+              <tbody>
+                {validationRows.map((row) => (
+                  <tr key={row.key} className="border-t" style={{ borderColor: C.border }}>
+                    <td className="px-3 py-2 font-semibold">{row.method}</td>
+                    <td className="px-3 py-2 font-black" style={{ color: C.green }}>
+                      {formatHourCount(row.estimated)}
+                    </td>
+                    <td className="px-3 py-2">{formatHourCount(row.estacao)}</td>
+                    <td className="px-3 py-2">{formatHourCount(row.banco)}</td>
+                    <td className="px-3 py-2">{formatSignedHours(row.erroEstacao)}</td>
+                    <td className="px-3 py-2">{formatSignedHours(row.erroBanco)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
+          <div className="mb-3 flex items-center gap-2">
+            <Droplets size={18} style={{ color: C.green }} />
+            <h2 className="text-sm font-black" style={{ color: C.textDark }}>
+              Medicao real - sensores fisicos
+            </h2>
+          </div>
+          <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
+            <table className="w-full min-w-[780px] border-collapse text-left text-sm">
+              <thead style={{ background: C.panelBg }}>
+                <tr>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Metodo real</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estacao atual ocorrencia</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estacao atual duracao</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco ocorrencia</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco duracao</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Diferenca</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SENSOR_REAL_ROWS.map((sensor) => {
+                  const estacaoDuracao = metricasEstacaoDia?.[sensor.durationKey] ?? null;
+                  const bancoDuracao = metricasBancoDia?.[sensor.durationKey] ?? null;
+                  const diferenca =
+                    estacaoDuracao !== null && bancoDuracao !== null
+                      ? bancoDuracao - estacaoDuracao
+                      : null;
+
+                  return (
+                    <tr key={sensor.key} className="border-t" style={{ borderColor: C.border }}>
+                      <td className="px-3 py-2 font-semibold">{sensor.label}</td>
+                      <td className="px-3 py-2">
+                        {formatHourCount(metricasEstacaoDia?.[sensor.occurrenceKey] ?? null)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {formatDurationWithMinutes(metricasEstacaoDia?.[sensor.durationKey] ?? null)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {formatHourCount(metricasBancoDia?.[sensor.occurrenceKey] ?? null)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {formatDurationWithMinutes(metricasBancoDia?.[sensor.durationKey] ?? null)}
+                      </td>
+                      <td className="px-3 py-2">{formatSignedHours(diferenca)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: C.border }}>
+          <div className="mb-3 flex items-center gap-2">
+            <Table2 size={18} style={{ color: C.green }} />
+            <h2 className="text-sm font-black" style={{ color: C.textDark }}>
+              Comparacao estacao x banco
+            </h2>
+          </div>
+          <div className="overflow-auto rounded-md border" style={{ borderColor: C.border }}>
+            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+              <thead style={{ background: C.panelBg }}>
+                <tr>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Metrica</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Estacao atual</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Banco</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Diferenca</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wide">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparacaoEstacaoBanco.map((row) => (
+                  <tr key={row.key} className="border-t" style={{ borderColor: C.border }}>
+                    <td className="px-3 py-2 font-semibold">{row.label}</td>
+                    <td className="px-3 py-2">{formatMetricValue(row.estacao, row.kind)}</td>
+                    <td className="px-3 py-2">{formatMetricValue(row.banco, row.kind)}</td>
+                    <td className="px-3 py-2">{formatMetricDifference(row.diferenca, row.kind)}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className="inline-flex min-h-6 items-center rounded-full px-2.5 text-[11px] font-black"
+                        style={{
+                          background:
+                            row.status === "OK"
+                              ? C.greenUltra
+                              : row.status === "Divergente"
+                                ? "#fef2f2"
+                                : "#f1f3f5",
+                          color:
+                            row.status === "OK"
+                              ? C.green
+                              : row.status === "Divergente"
+                                ? C.red
+                                : "#6b7280",
+                        }}
+                      >
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
 
