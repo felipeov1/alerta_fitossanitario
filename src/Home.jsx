@@ -59,6 +59,19 @@ export default function Home() {
           </button>
 
           <button
+            onClick={() => window.open("/v3", "_blank")}
+            className="w-full py-4 px-5 rounded-xl font-bold text-base transition-all hover:opacity-90 flex flex-col items-center gap-0.5"
+            style={{
+              background: C.greenMid,
+              color: C.white,
+              border: `2px solid ${C.greenMid}`,
+            }}
+          >
+            <span className="text-base font-black">Versão 3 — V1 + Previsão Diária</span>
+            <span className="text-xs font-medium opacity-75">/v3</span>
+          </button>
+
+          <button
             onClick={() => window.open("/calculo-teste", "_blank")}
             className="w-full py-4 px-5 rounded-xl font-bold text-base transition-all hover:opacity-90 flex flex-col items-center gap-0.5"
             style={{
