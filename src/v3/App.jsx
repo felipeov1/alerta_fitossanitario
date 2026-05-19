@@ -60,15 +60,6 @@ const calculateDiseaseRisk = (station) => {
       ? parseFloat(tmed.match(/\d+(?:\.\d+)?/)?.[0] || 0)
       : tmed;
 
-  console.log("Station calc:", {
-    ur,
-    chuva,
-    tmed,
-    urValue,
-    chuvaValue,
-    tmedValue,
-  });
-
   // PMF (Período de Molhamento Foliar): 1 se UR > 90%, senão 0
   const pmf = urValue > 90 ? 1 : 0;
 
@@ -81,14 +72,6 @@ const calculateDiseaseRisk = (station) => {
 
   // Temperatura média acumulada durante molhamento
   const tmedAc = pmfChuva > 0 ? tmedValue : 0;
-
-  console.log("Calculations:", {
-    pmf,
-    pmfChuva,
-    pmfHs,
-    tmedAc,
-    product: pmfHs * tmedAc,
-  });
 
   // SARNA: Precisa pmfChuva E horas E temperatura
   let sarnaRisk = "Não Favorável";
@@ -105,8 +88,6 @@ const calculateDiseaseRisk = (station) => {
     }
   }
 
-  console.log("Disease Risk:", { sarnaRisk });
-
   // MANCHA DE GALA: Precisa de pmfHs >= 10 E tmedAc > 14.9
   let galaRisk = "Não Favorável";
   if (pmfHs >= 10 && tmedAc > 14.9) {
@@ -116,14 +97,21 @@ const calculateDiseaseRisk = (station) => {
   return { sarnaRisk, galaRisk };
 };
 
+const normalizeText = (text) =>
+  String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
 const getFruitForDisease = (dName) => {
-  const n = dName.toLowerCase();
-  if (n.includes("míldio") || n.includes("uva")) return "🍇";
+  const n = normalizeText(dName);
+  if (n.includes("mildio") || n.includes("uva")) return "🍇";
   if (n.includes("sigatoka") || n.includes("banana")) return "🍌";
   if (n.includes("ferrugem") || n.includes("pera")) return "🍐";
   if (n.includes("greening") || n.includes("laranja") || n.includes("pinta")) return "🍊";
   if (n.includes("abacate")) return "🥑";
-  return "🍎"; // Default to Maçã for Sarna, Gala, Podridão
+  if (n.includes("sarna") || n.includes("gala") || n.includes("maca") || n.includes("podridao amarga")) return "🍎";
+  return null;
 };
 
 const FORECASTS_BY_STATION = {
@@ -937,6 +925,25 @@ const App = () => {
         ? "#fef08a"
         : C.greenPale;
 
+  const getDiseaseRisk = (disease, station) => {
+    if (!disease) return "Não Favorável";
+    if (disease.name === "Sarna da Maçã" || disease.name === "Mancha de Gala") {
+      const calculated = calculateDiseaseRisk(station);
+      if (disease.name === "Sarna da Maçã") return calculated.sarnaRisk;
+      return calculated.galaRisk;
+    }
+    return disease.risk || "Não Favorável";
+  };
+
+  const getMarkerFruits = (marker) => {
+    if (!marker) return [];
+    const fruits = marker.fruits || [];
+    const diseaseFruits = (marker.diseases || [])
+      .map((disease) => getFruitForDisease(disease.name))
+      .filter(Boolean);
+    return Array.from(new Set([...fruits, ...diseaseFruits]));
+  };
+
   const getForecastDays = (marker) => {
     if (!marker) return [];
     if (marker.forecast?.length) return marker.forecast;
@@ -945,21 +952,25 @@ const App = () => {
 
   const getDiseasesForSelectedFruit = (marker) => {
     if (!marker?.diseases) return [];
-    if (!selectedFruitTab || marker.fruits?.length <= 1) return marker.diseases;
+    if (!selectedFruitTab || getMarkerFruits(marker).length <= 1) return marker.diseases;
     return marker.diseases.filter((d) => getFruitForDisease(d.name) === selectedFruitTab);
   };
 
   const handleMarkerClick = (marker) => {
+    const markerFruits = getMarkerFruits(marker);
+    const firstFruitWithDisease = markerFruits.find((fruit) =>
+      marker.diseases?.some((disease) => getFruitForDisease(disease.name) === fruit),
+    );
     setActiveMarker(marker);
-    setSelectedFruitTab(marker.fruits?.[0] || null);
+    setSelectedFruitTab(firstFruitWithDisease || markerFruits[0] || null);
     setSelectedForecastDay(0);
     setShowBottomSheet(true);
   };
 
   const getMarkerIcon = (m, isActive) => {
     const worstRisk = (alerts) => {
-      if (alerts.some(d => d.risk === "Favorável à Doença")) return "Favorável à Doença";
-      if (alerts.some(d => d.risk === "Pouco Favorável")) return "Pouco Favorável";
+      if (alerts.some(d => getDiseaseRisk(d, m.station) === "Favorável à Doença")) return "Favorável à Doença";
+      if (alerts.some(d => getDiseaseRisk(d, m.station) === "Pouco Favorável")) return "Pouco Favorável";
       return "ok";
     };
 
@@ -973,14 +984,14 @@ const App = () => {
       : r === "Pouco Favorável"   ? "#fffbeb"
       : "#f0fdf4";
 
-    const fruitsToRender = m.fruits || ["🍎"];
+    const markerFruits = getMarkerFruits(m);
+    const fruitsToRender = markerFruits.length > 0 ? markerFruits : ["📍"];
 
     const alertsByFruit = {};
     fruitsToRender.forEach(f => { alertsByFruit[f] = []; });
-    m.diseases.forEach(d => {
+    m.diseases?.forEach(d => {
       const fe = getFruitForDisease(d.name);
-      if (alertsByFruit[fe]) alertsByFruit[fe].push(d);
-      else if (fruitsToRender[0]) alertsByFruit[fruitsToRender[0]].push(d);
+      if (fe && alertsByFruit[fe]) alertsByFruit[fe].push(d);
     });
 
     const scale = isActive ? 1.2 : 1;
@@ -991,13 +1002,15 @@ const App = () => {
 
     const chipsHtml = fruitsToRender.map(f => {
       const alerts = alertsByFruit[f] || [];
-      const alertsWithRisk = alerts.filter(d => d.risk === "Favorável à Doença" || d.risk === "Pouco Favorável");
+      const chipRisk = alerts.length > 0 ? worstRisk(alerts) : null;
+      const chipBg = alerts.length > 0 ? riskBgCode(chipRisk) : "#f8fafc";
+      const chipBorder = alerts.length > 0 ? riskColorCode(chipRisk) : "#e5e7eb";
 
-      const dotsHtml = alertsWithRisk.slice(0, 3).map(d =>
-        `<div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${riskColorCode(d.risk)};flex-shrink:0;" title="${d.name}"></div>`
+      const dotsHtml = alerts.slice(0, 3).map(d =>
+        `<div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${riskColorCode(getDiseaseRisk(d, m.station))};flex-shrink:0;" title="${d.name}"></div>`
       ).join("");
 
-      const dotsRow = alertsWithRisk.length > 0
+      const dotsRow = alerts.length > 0
         ? `<div style="display:flex;gap:2px;justify-content:center;margin-top:3px;">${dotsHtml}</div>`
         : `<div style="height:${dotSize + 3}px;"></div>`;
 
@@ -1006,8 +1019,8 @@ const App = () => {
           <div style="
             width:${chipSize}px;height:${chipSize}px;
             border-radius:${Math.round(10 * scale)}px;
-            background:#f0fdf4;
-            border:2px solid #d1fae5;
+            background:${chipBg};
+            border:2px solid ${chipBorder};
             display:flex;align-items:center;justify-content:center;
             box-shadow:0 2px 6px rgba(0,0,0,0.10);
             font-size:${emojiSize}px;line-height:1;
@@ -1135,10 +1148,13 @@ const App = () => {
       const isActive = activeMarker?.id === m.id;
       // Se há filtro de fruta, adapta o marcador
       if (filterEmoji) {
-        const hasFruit = (m.fruits || []).includes(filterEmoji);
+        const hasFruit = getMarkerFruits(m).includes(filterEmoji);
+        const filteredDiseases = (m.diseases || []).filter(
+          (disease) => getFruitForDisease(disease.name) === filterEmoji,
+        );
         // Cria versão filtrada do marcador: só mostra a fruta filtrada (ou neutro)
         const filteredM = hasFruit
-          ? { ...m, fruits: [filterEmoji] }
+          ? { ...m, fruits: [filterEmoji], diseases: filteredDiseases }
           : { ...m, fruits: ["\u{1F4CD}"], diseases: [] }; // pino neutro
         marker.setIcon(getMarkerIcon(filteredM, isActive));
       } else {
@@ -1811,48 +1827,6 @@ const App = () => {
                         </div>
                       ))}
                     </div>
-
-                    {forecastDiseases.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {forecastDiseases.map((d) => {
-                          const displayRisk = getForecastDiseaseRisk(currentForecast, d.name);
-
-                          return (
-                            <div
-                              key={d.name}
-                              className="p-3 rounded-xl"
-                              style={{ background: C.white, border: `1px solid ${riskBorder(displayRisk)}` }}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-black leading-tight" style={{ color: C.textDark }}>
-                                    {d.name}
-                                  </p>
-                                  <p className="text-[10px] italic mt-0.5 truncate" style={{ color: "#6b7280" }}>
-                                    {d.sci}
-                                  </p>
-                                </div>
-                                <span
-                                  className="shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase text-white text-right"
-                                  style={{ background: riskColor(displayRisk) }}
-                                >
-                                  {displayRisk}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div
-                        className="py-8 px-4 text-center rounded-2xl"
-                        style={{ background: C.white, border: "1px dashed #dfe6e2" }}
-                      >
-                        <p className="text-sm font-semibold text-slate-500">
-                          Nenhuma previsão para esta fruta.
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -1868,34 +1842,40 @@ const App = () => {
               </div>
 
               {/* Tabs de Frutas */}
-              {activeMarker?.fruits?.length > 1 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  {activeMarker.fruits.map((fruitEmoji, idx) => {
-                    const isSelected = selectedFruitTab === fruitEmoji;
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedFruitTab(fruitEmoji)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all"
-                        style={{
-                          background: isSelected ? C.greenUltra : C.white,
-                          border: `1px solid ${isSelected ? C.greenPale : "#e5e7eb"}`,
-                          boxShadow: isSelected ? "none" : "0 1px 2px rgba(0,0,0,0.05)",
-                        }}
-                      >
-                        <span className="text-sm">{fruitEmoji}</span>
-                        <span className="text-xs font-bold" style={{ color: isSelected ? C.greenMid : "#6b7280" }}>
-                          {fruitEmoji === "🍎" ? "Maçã" : fruitEmoji === "🍇" ? "Uva" : fruitEmoji === "🍌" ? "Banana" : fruitEmoji === "🍐" ? "Pera" : fruitEmoji === "🍊" ? "Laranja" : fruitEmoji === "🥑" ? "Abacate" : "Cultura"}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {(() => {
+                const markerFruits = getMarkerFruits(activeMarker);
+                if (markerFruits.length <= 1) return null;
+
+                return (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    {markerFruits.map((fruitEmoji, idx) => {
+                      const isSelected = selectedFruitTab === fruitEmoji;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedFruitTab(fruitEmoji)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all"
+                          style={{
+                            background: isSelected ? C.greenUltra : C.white,
+                            border: `1px solid ${isSelected ? C.greenPale : "#e5e7eb"}`,
+                            boxShadow: isSelected ? "none" : "0 1px 2px rgba(0,0,0,0.05)",
+                          }}
+                        >
+                          <span className="text-sm">{fruitEmoji}</span>
+                          <span className="text-xs font-bold" style={{ color: isSelected ? C.greenMid : "#6b7280" }}>
+                            {fruitEmoji === "🍎" ? "Maçã" : fruitEmoji === "🍇" ? "Uva" : fruitEmoji === "🍌" ? "Banana" : fruitEmoji === "🍐" ? "Pera" : fruitEmoji === "🍊" ? "Laranja" : fruitEmoji === "🥑" ? "Abacate" : "Cultura"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {(() => {
+                const markerFruits = getMarkerFruits(activeMarker);
                 const filteredDiseases = activeMarker?.diseases?.filter((d) => {
-                  if (!selectedFruitTab || activeMarker.fruits.length === 1) return true;
+                  if (!selectedFruitTab || markerFruits.length <= 1) return true;
                   return getFruitForDisease(d.name) === selectedFruitTab;
                 });
 
