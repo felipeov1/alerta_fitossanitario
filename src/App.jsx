@@ -48,12 +48,14 @@ const normalizeText = (text = "") =>
   text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const getFruitForDisease = (dName) => {
+  if (!dName) return null;
   const n = normalizeText(dName);
-  if (n.includes("mildio") || n.includes("uva")) return "🍇";
+  if (n.includes("mildio") || n.includes("uva") || n.includes("videira")) return "🍇";
   if (n.includes("sigatoka") || n.includes("banana")) return "🍌";
-  if (n.includes("ferrugem") || n.includes("pera")) return "🍐";
-  if (n.includes("greening") || n.includes("laranja") || n.includes("pinta")) return "🍊";
-  if (n.includes("abacate")) return "🥑";
+  if (n.includes("podridao parda") || n.includes("pessego")) return "🍑";
+  if (n.includes("greening") || n.includes("laranja") || n.includes("pinta") || n.includes("citrico") || n.includes("citrus")) return "🍊";
+  if (n.includes("abacate") || n.includes("antracnose")) return "🥑";
+  if (n.includes("entomosporiose") || n.includes("pera")) return "🍐";
   if (n.includes("sarna") || n.includes("gala") || n.includes("maca") || n.includes("podridao amarga")) return "🍎";
   return null;
 };
@@ -337,6 +339,7 @@ const App = () => {
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [selectedForecastDay, setSelectedForecastDay] = useState(0);
   const [selectedDiseaseTab, setSelectedDiseaseTab] = useState("all");
+  const [stationPhase, setStationPhase] = useState("");
   const [showPreventionModal, setShowPreventionModal] = useState(false);
   const [selectedManualCrop, setSelectedManualCrop] = useState("");
   const [manualSearchQuery, setManualSearchQuery] = useState("");
@@ -456,7 +459,10 @@ const App = () => {
   const markers = [
     {
       id: 1, lat: -23.10, lng: -50.36, name: "Estação Bandeirantes", city: "Bandeirantes", status: "Normal", diseaseRisk: "Não Favorável", fase: "Crescimento", syncAgo: "10 minutos", fruits: ["🍎", "🍇"],
-      diseases: [{ name: "Sarna da Maçã", risk: "Não Favorável", alertCause: [] }],
+      diseases: [
+        { name: "Sarna da Maçã", risk: "Não Favorável", alertCause: [] },
+        { name: "Míldio da Videira", risk: "Não Favorável", alertCause: [] }
+      ],
       codependency: [],
       station: { temp: "22.5°C", hum: "65%", wetness: "0 h", rain: "0 mm", wind: "12 km/h" },
       forecast: [{ day: "Hoje", date: "14/04", temp: "22°C", hum: "65%", rain: "0mm", wetness: "0 h", sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" }],
@@ -491,7 +497,10 @@ const App = () => {
     },
     {
       id: 5, lat: -25.47, lng: -50.65, name: "Estação Irati", city: "Irati", status: "Normal", diseaseRisk: "Não Favorável", fase: "Colheita", syncAgo: "8 minutos", fruits: ["🍎", "🍑"],
-      diseases: [{ name: "Sarna da Maçã", risk: "Não Favorável", alertCause: [] }],
+      diseases: [
+        { name: "Sarna da Maçã", risk: "Não Favorável", alertCause: [] },
+        { name: "Podridão Parda", risk: "Não Favorável", alertCause: [] }
+      ],
       codependency: [],
       station: { temp: "18.0°C", hum: "60%", wetness: "1 h", rain: "0 mm", wind: "12 km/h" },
       forecast: [{ day: "Hoje", date: "14/04", temp: "18°C", hum: "60%", rain: "0mm", wetness: "1 h", sarnaRisk: "Não Favorável", galaRisk: "Não Favorável" }],
@@ -499,7 +508,10 @@ const App = () => {
     },
     {
       id: 6, lat: -23.31, lng: -51.16, name: "Estação Londrina", city: "Londrina", status: "Atenção", diseaseRisk: "Pouco Favorável", fase: "Crescimento de frutos", syncAgo: "12 minutos", fruits: ["🍎", "🍇"],
-      diseases: [{ name: "Sarna da Maçã", risk: "Pouco Favorável", alertCause: [{ label: "Umidade", value: "88%", threshold: "90%", critical: false }] }],
+      diseases: [
+        { name: "Sarna da Maçã", risk: "Pouco Favorável", alertCause: [{ label: "Umidade", value: "88%", threshold: "90%", critical: false }] },
+        { name: "Míldio da Videira", risk: "Pouco Favorável", alertCause: [{ label: "Umidade", value: "88%", threshold: "90%", critical: false }] }
+      ],
       codependency: [],
       station: { temp: "19.5°C", hum: "88%", wetness: "7 h", rain: "5 mm", wind: "8 km/h" },
       forecast: [{ day: "Hoje", date: "14/04", temp: "19°C", hum: "88%", rain: "5mm", wetness: "7 h", sarnaRisk: "Pouco Favorável", galaRisk: "Pouco Favorável" }],
@@ -550,7 +562,10 @@ const App = () => {
     },
     {
       id: 12, lat: -24.32, lng: -50.61, name: "Estação Telêmaco Borba", city: "Telêmaco Borba", status: "Atenção", diseaseRisk: "Pouco Favorável", fase: "Crescimento", syncAgo: "20 minutos", fruits: ["🍎", "🍇"],
-      diseases: [{ name: "Sarna da Maçã", risk: "Pouco Favorável", alertCause: [{ label: "Umidade relativa", value: "89%", threshold: "90%", critical: false }] }],
+      diseases: [
+        { name: "Sarna da Maçã", risk: "Pouco Favorável", alertCause: [{ label: "Umidade relativa", value: "89%", threshold: "90%", critical: false }] },
+        { name: "Míldio da Videira", risk: "Pouco Favorável", alertCause: [{ label: "Umidade relativa", value: "89%", threshold: "90%", critical: false }] }
+      ],
       codependency: [],
       station: { temp: "21.0°C", hum: "89%", wetness: "6 h", rain: "8 mm", wind: "9 km/h" },
       forecast: [{ day: "Hoje", date: "14/04", temp: "21°C", hum: "89%", rain: "8mm", wetness: "6 h", sarnaRisk: "Pouco Favorável", galaRisk: "Não Favorável" }],
@@ -636,13 +651,40 @@ const App = () => {
     return "Não Favorável";
   };
 
+  const getCropEmoji = (cropName) => {
+    if (cropName === "Maçã") return "🍎";
+    if (cropName === "Uva") return "🍇";
+    if (cropName === "Banana") return "🍌";
+    if (cropName === "Pêssego") return "🍑";
+    return null;
+  };
+
   const getMarkerFruits = (marker) => {
     if (!marker) return [];
     const fruits = marker.fruits || [];
     const diseaseFruits = (marker.diseases || [])
       .map((disease) => getFruitForDisease(disease.name))
       .filter(Boolean);
-    return Array.from(new Set([...fruits, ...diseaseFruits]));
+    const allFruits = Array.from(new Set([...fruits, ...diseaseFruits]));
+
+    if (selectedCrop) {
+      const activeEmoji = getCropEmoji(selectedCrop);
+      if (activeEmoji && allFruits.includes(activeEmoji)) {
+        return [activeEmoji];
+      }
+    }
+
+    return allFruits;
+  };
+
+  const handleClearFilters = () => {
+    setSelectedCrop("");
+    setSelectedPhase("");
+    setSelectedDisease("");
+    setSelectedCity("");
+    setSelectedFruitTab(null);
+    setSelectedDiseaseTab("all");
+    setFiltersApplied(true);
   };
 
   const handleMarkerClick = (marker, targetFruit = null) => {
@@ -653,6 +695,7 @@ const App = () => {
     setActiveMarker(marker);
     setSelectedFruitTab(targetFruit || firstFruitWithDisease || markerFruits[0] || null);
     setSelectedDiseaseTab("all");
+    setStationPhase(marker?.fase || "Floração");
     setShowBottomSheet(true);
     setSelectedForecastDay(0);
   };
@@ -904,8 +947,10 @@ const App = () => {
       // 3. Doença
       if (selectedDisease) {
         const normDis = normalizeText(selectedDisease);
-        const hasDisease = m.diseases?.some((d) => normalizeText(d.name).includes(normDis));
-        if (!hasDisease) return false;
+        const targetFruit = getFruitForDisease(selectedDisease);
+        const hasExplicit = m.diseases?.some((d) => normalizeText(d.name).includes(normDis));
+        const hasFruit = targetFruit && getMarkerFruits(m).includes(targetFruit);
+        if (!hasExplicit && !hasFruit) return false;
       }
 
       // 4. Município / Estação
@@ -917,6 +962,101 @@ const App = () => {
 
       return true;
     });
+  };
+
+  const getFilterOptions = () => {
+    // Filter base markers by city if selected
+    const cityBaseMarkers = markers.filter((m) => {
+      if (selectedCity) {
+        const normCity = normalizeText(selectedCity);
+        const markerCity = normalizeText(m.city || m.name || "");
+        if (!markerCity.includes(normCity)) return false;
+      }
+      return true;
+    });
+
+    // 1. Available Crops (based on city filter or all)
+    const availableFruitEmojis = new Set();
+    cityBaseMarkers.forEach((m) => {
+      getMarkerFruits(m).forEach((f) => availableFruitEmojis.add(f));
+    });
+
+    const cropOpts = [];
+    if (availableFruitEmojis.has("🍎")) cropOpts.push("Maçã");
+    if (availableFruitEmojis.has("🍇")) cropOpts.push("Uva");
+    if (availableFruitEmojis.has("🍌")) cropOpts.push("Banana");
+    if (availableFruitEmojis.has("🍑")) cropOpts.push("Pêssego");
+
+    // 2. Matching markers based on selected Crop and City
+    const cropMatchingMarkers = cityBaseMarkers.filter((m) => {
+      if (!selectedCrop) return true;
+      const markerFruits = getMarkerFruits(m);
+      const fruitNames = markerFruits.map((emoji) => {
+        if (emoji === "🍎") return "Maçã";
+        if (emoji === "🍇") return "Uva";
+        if (emoji === "🍌") return "Banana";
+        if (emoji === "🍑") return "Pêssego";
+        return "";
+      });
+      return fruitNames.includes(selectedCrop);
+    });
+
+    // 3. Relational Diseases for selected Crop / City
+    let diseaseOpts = [];
+    if (selectedCrop === "Maçã") {
+      diseaseOpts = ["Sarna da Maçã", "Mancha de Gala"];
+    } else if (selectedCrop === "Uva") {
+      diseaseOpts = ["Míldio da Videira"];
+    } else if (selectedCrop === "Banana") {
+      diseaseOpts = ["Sigatoka Negra"];
+    } else if (selectedCrop === "Pêssego") {
+      diseaseOpts = ["Podridão Parda"];
+    } else {
+      const dSet = new Set();
+      cropMatchingMarkers.forEach((m) => {
+        m.diseases?.forEach((d) => dSet.add(d.name));
+        const fruits = getMarkerFruits(m);
+        if (fruits.includes("🍎")) { dSet.add("Sarna da Maçã"); dSet.add("Mancha de Gala"); }
+        if (fruits.includes("🍇")) dSet.add("Míldio da Videira");
+        if (fruits.includes("🍌")) dSet.add("Sigatoka Negra");
+        if (fruits.includes("🍑")) dSet.add("Podridão Parda");
+      });
+      diseaseOpts = Array.from(dSet);
+    }
+
+    // 4. Relational Phenological Phases
+    const phaseSet = new Set();
+    cropMatchingMarkers.forEach((m) => {
+      if (m.fase) phaseSet.add(m.fase);
+    });
+    const phaseOpts = Array.from(phaseSet);
+
+    // 5. Relational Cities based strictly on selected Crop & Disease
+    const cityMatchingMarkers = markers.filter((m) => {
+      if (selectedCrop) {
+        const markerFruits = getMarkerFruits(m);
+        const fruitNames = markerFruits.map((emoji) => {
+          if (emoji === "🍎") return "Maçã";
+          if (emoji === "🍇") return "Uva";
+          if (emoji === "🍌") return "Banana";
+          if (emoji === "🍑") return "Pêssego";
+          return "";
+        });
+        if (!fruitNames.includes(selectedCrop)) return false;
+      }
+      if (selectedDisease) {
+        const normDis = normalizeText(selectedDisease);
+        const hasExplicit = m.diseases?.some((d) => normalizeText(d.name).includes(normDis));
+        const targetFruit = getFruitForDisease(selectedDisease);
+        const hasFruit = targetFruit && getMarkerFruits(m).includes(targetFruit);
+        return hasExplicit || hasFruit;
+      }
+      return true;
+    });
+
+    const cityOpts = Array.from(new Set(cityMatchingMarkers.map((m) => m.city || m.name)));
+
+    return { cropOpts, phaseOpts, diseaseOpts, cityOpts };
   };
 
   useEffect(() => {
@@ -1006,14 +1146,20 @@ const App = () => {
           filterLayout === "sidebar" &&
           isDesktop &&
           (() => {
+            const { cropOpts, phaseOpts, diseaseOpts, cityOpts } = getFilterOptions();
+
             const filters = [
               {
                 icon: Sprout,
                 label: "Fruta",
                 placeholder: "Todas as Frutas",
                 val: selectedCrop,
-                set: setSelectedCrop,
-                opts: ["Maçã", "Uva", "Banana", "Pêssego"],
+                set: (v) => {
+                  setSelectedCrop(v);
+                  setSelectedDisease("");
+                  setSelectedCity("");
+                },
+                opts: cropOpts,
               },
               {
                 icon: TrendingUp,
@@ -1021,27 +1167,18 @@ const App = () => {
                 placeholder: "Todas as Fases",
                 val: selectedPhase,
                 set: setSelectedPhase,
-                opts: [
-                  "Crescimento",
-                  "Floração",
-                  "Frutificação",
-                  "Colheita",
-                  "Dormência",
-                ],
+                opts: phaseOpts,
               },
               {
                 icon: Bug,
                 label: "Doença",
                 placeholder: "Todas as Doenças",
                 val: selectedDisease,
-                set: setSelectedDisease,
-                opts: [
-                  "Sarna da Maçã",
-                  "Mancha de Gala",
-                  "Míldio da Videira",
-                  "Sigatoka Negra",
-                  "Podridão Parda",
-                ],
+                set: (v) => {
+                  setSelectedDisease(v);
+                  setSelectedCity("");
+                },
+                opts: diseaseOpts,
               },
               {
                 icon: MapPin,
@@ -1049,21 +1186,7 @@ const App = () => {
                 placeholder: "Todos os Municípios",
                 val: selectedCity,
                 set: setSelectedCity,
-                opts: [
-                  "Bandeirantes",
-                  "Bela Vista do Paraíso",
-                  "Francisco Beltrão",
-                  "Guarapuava",
-                  "Irati",
-                  "Londrina",
-                  "Morretes",
-                  "Palmas",
-                  "Planalto",
-                  "Ponta Grossa",
-                  "Santa Tereza do Oeste",
-                  "Telêmaco Borba",
-                  "Xambrê",
-                ],
+                opts: cityOpts,
               },
             ];
 
@@ -1148,13 +1271,7 @@ const App = () => {
                   <div className="mt-6">
                     <button
                       className="w-full py-2.5 rounded-xl font-extrabold text-xs text-slate-700 hover:bg-slate-200/80 transition-all border border-slate-300 shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                      onClick={() => {
-                        setSelectedCrop("");
-                        setSelectedPhase("");
-                        setSelectedDisease("");
-                        setSelectedCity("");
-                        setFiltersApplied(true);
-                      }}
+                      onClick={handleClearFilters}
                     >
                       <X size={14} /> LIMPAR FILTROS
                     </button>
@@ -1575,15 +1692,15 @@ const App = () => {
               </div>
             </div>
 
-            {/* Fase Fenológica */}
+            {/* Fase Fenológica Header Card */}
             <div
               className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-4"
               style={{ background: C.greenUltra, border: `1px solid ${C.greenPale}` }}
             >
               <Sprout size={15} style={{ color: C.green }} />
               <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Fase Fenológica</p>
-                <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>{activeMarker?.fase}</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: C.greenMid }}>Fase Fenológica Selecionada</p>
+                <p className="text-xs font-semibold leading-tight" style={{ color: C.textDark }}>{stationPhase || activeMarker?.fase}</p>
               </div>
             </div>
 
@@ -1714,7 +1831,7 @@ const App = () => {
               })()}
             </div>
 
-            {/* Menu por Cultura e Doença */}
+            {/* Menu por Cultura, Fase e Doença */}
             <div className="space-y-3 mt-6 pt-4 border-t border-slate-200/80">
               <div className="flex items-center justify-between px-1 mb-1">
                 <div className="flex items-center gap-2">
@@ -1722,15 +1839,15 @@ const App = () => {
                     <Bug size={15} />
                   </div>
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Menu por Cultura e Doença
+                    Menu por Cultura, Fase e Doença
                   </h3>
                 </div>
                 <span className="text-[10px] font-bold text-slate-400">
-                  Filtre por Cultura e Enfermidade
+                  Filtre Cultura, Fase e Enfermidade
                 </span>
               </div>
 
-              {/* Level 1: Menu por Cultura */}
+              {/* Passo 1: Menu por Cultura */}
               {(() => {
                 const markerFruits = getMarkerFruits(activeMarker);
                 if (markerFruits.length === 0) return null;
@@ -1779,12 +1896,44 @@ const App = () => {
                 );
               })()}
 
-              {/* Level 2: Menu por Doença */}
+              {/* Passo 2: Menu para Selecionar a Fase Fenológica da Cultura */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                    <Sprout size={12} className="text-emerald-700" />
+                    2. Selecione a Fase Fenológica:
+                  </p>
+                  <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80">
+                    Fase: {stationPhase || activeMarker?.fase || "Floração"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 px-0.5 scrollbar-none">
+                  {["Dormência", "Brotação", "Floração", "Frutificação", "Colheita"].map((phaseOpt) => {
+                    const isPhaseSel = (stationPhase || activeMarker?.fase) === phaseOpt;
+                    return (
+                      <button
+                        key={phaseOpt}
+                        onClick={() => setStationPhase(phaseOpt)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                          isPhaseSel
+                            ? "bg-emerald-800 text-white shadow-xs scale-[1.02]"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/80"
+                        }`}
+                      >
+                        <Sprout size={12} className={isPhaseSel ? "text-emerald-200" : "text-slate-400"} />
+                        <span>{phaseOpt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Passo 3: Menu por Doença */}
               {(() => {
                 const markerFruits = getMarkerFruits(activeMarker);
+                const activeFruit = selectedFruitTab || markerFruits[0];
                 const cropDiseases = activeMarker?.diseases?.filter((d) => {
-                  if (!selectedFruitTab || markerFruits.length <= 1) return true;
-                  return getFruitForDisease(d.name) === selectedFruitTab;
+                  return getFruitForDisease(d.name) === activeFruit;
                 }) || [];
 
                 if (cropDiseases.length <= 1) return null;
@@ -1792,7 +1941,7 @@ const App = () => {
                 return (
                   <div className="space-y-1.5 pt-1">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 px-1">
-                      2. Selecione a Doença:
+                      3. Selecione a Doença:
                     </p>
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 px-0.5 scrollbar-none">
                       <button
@@ -1825,8 +1974,9 @@ const App = () => {
 
               {(() => {
                 const markerFruits = getMarkerFruits(activeMarker);
+                const activeFruit = selectedFruitTab || markerFruits[0];
                 let filteredDiseasesRaw = activeMarker?.diseases?.filter((d) => {
-                  const matchesCrop = !selectedFruitTab || markerFruits.length <= 1 || getFruitForDisease(d.name) === selectedFruitTab;
+                  const matchesCrop = getFruitForDisease(d.name) === activeFruit;
                   const matchesDisease = selectedDiseaseTab === "all" || d.name === selectedDiseaseTab;
                   return matchesCrop && matchesDisease;
                 }) || [];
@@ -1842,7 +1992,7 @@ const App = () => {
                     return [{ name: "Sarna da Maçã", sci: "Venturia inaequalis", risk: "Não Favorável", alertCause: [] }];
                   };
 
-                  const fallbacks = getFallbackForEmoji(selectedFruitTab || markerFruits[0]);
+                  const fallbacks = getFallbackForEmoji(activeFruit);
                   filteredDiseasesRaw = fallbacks.filter((d) => selectedDiseaseTab === "all" || d.name === selectedDiseaseTab);
                 }
 
@@ -1908,9 +2058,15 @@ const App = () => {
                         }}
                       >
                         {/* Header: Nome da Doença */}
-                        <div className="mb-3">
-                          <p className="text-base font-black leading-tight md:whitespace-nowrap truncate" style={{ color: C.textDark }}>{d.name}</p>
-                          {d.sci && <p className="text-[11px] italic mt-0.5 md:whitespace-nowrap truncate" style={{ color: "#6b7280" }}>{d.sci}</p>}
+                        <div className="mb-3 flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-base font-black leading-tight md:whitespace-nowrap truncate" style={{ color: C.textDark }}>{d.name}</p>
+                            {d.sci && <p className="text-[11px] italic mt-0.5 md:whitespace-nowrap truncate" style={{ color: "#6b7280" }}>{d.sci}</p>}
+                          </div>
+                          <span className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                            <Sprout size={12} className="text-emerald-600" />
+                            Fase: {stationPhase || activeMarker?.fase || "Floração"}
+                          </span>
                         </div>
 
                         {/* BARRA DE DESTAQUE DO RISCO */}
@@ -2072,107 +2228,86 @@ const App = () => {
 
               {/* Selects em coluna */}
               <div className="space-y-3.5 max-h-[55vh] overflow-y-auto pr-1">
-                {[
-                  {
-                    icon: Sprout,
-                    placeholder: "Todas as Frutas",
-                    val: selectedCrop,
-                    set: setSelectedCrop,
-                    opts: ["Maçã", "Uva", "Banana", "Pêssego"],
-                  },
-                  {
-                    icon: TrendingUp,
-                    placeholder: "Todas as Fases",
-                    val: selectedPhase,
-                    set: setSelectedPhase,
-                    opts: [
-                      "Crescimento",
-                      "Floração",
-                      "Frutificação",
-                      "Colheita",
-                      "Dormência",
-                    ],
-                  },
-                  {
-                    icon: Bug,
-                    placeholder: "Todas as Doenças",
-                    val: selectedDisease,
-                    set: setSelectedDisease,
-                    opts: [
-                      "Sarna da Maçã",
-                      "Mancha de Gala",
-                      "Míldio da Videira",
-                      "Sigatoka Negra",
-                      "Podridão Parda",
-                    ],
-                  },
-                  {
-                    icon: MapPin,
-                    placeholder: "Todos os Municípios",
-                    val: selectedCity,
-                    set: setSelectedCity,
-                    opts: [
-                      "Bandeirantes",
-                      "Bela Vista do Paraíso",
-                      "Francisco Beltrão",
-                      "Guarapuava",
-                      "Irati",
-                      "Londrina",
-                      "Morretes",
-                      "Palmas",
-                      "Planalto",
-                      "Ponta Grossa",
-                      "Santa Tereza do Oeste",
-                      "Telêmaco Borba",
-                      "Xambrê",
-                    ],
-                  },
-                ].map((f, i) => (
-                  <div key={i} className="relative">
-                    <f.icon
-                      size={15}
-                      className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                      style={{ color: C.greenMid }}
-                    />
-                    <select
-                      className="w-full pl-10 pr-8 py-3 appearance-none rounded-xl text-xs font-bold outline-none transition-all cursor-pointer"
-                      style={{
-                        background: "#ffffff",
-                        border: `1.5px solid ${C.border}`,
-                        color: f.val ? C.textDark : "#9ca3af",
-                      }}
-                      value={f.val}
-                      onChange={(e) => {
-                        f.set(e.target.value);
-                        setFiltersApplied(true);
-                      }}
-                    >
-                      <option value="">{f.placeholder}</option>
-                      {f.opts.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={14}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-700"
-                    />
-                  </div>
-                ))}
+                {(() => {
+                  const { cropOpts, phaseOpts, diseaseOpts, cityOpts } = getFilterOptions();
+
+                  return [
+                    {
+                      icon: Sprout,
+                      placeholder: "Todas as Frutas",
+                      val: selectedCrop,
+                      set: (v) => {
+                        setSelectedCrop(v);
+                        setSelectedDisease("");
+                        setSelectedCity("");
+                      },
+                      opts: cropOpts,
+                    },
+                    {
+                      icon: TrendingUp,
+                      placeholder: "Todas as Fases",
+                      val: selectedPhase,
+                      set: setSelectedPhase,
+                      opts: phaseOpts,
+                    },
+                    {
+                      icon: Bug,
+                      placeholder: "Todas as Doenças",
+                      val: selectedDisease,
+                      set: (v) => {
+                        setSelectedDisease(v);
+                        setSelectedCity("");
+                      },
+                      opts: diseaseOpts,
+                    },
+                    {
+                      icon: MapPin,
+                      placeholder: "Todos os Municípios",
+                      val: selectedCity,
+                      set: setSelectedCity,
+                      opts: cityOpts,
+                    },
+                  ].map((f, i) => (
+                    <div key={i} className="relative">
+                      <f.icon
+                        size={15}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{ color: C.greenMid }}
+                      />
+                      <select
+                        className="w-full pl-10 pr-8 py-3 appearance-none rounded-xl text-xs font-bold outline-none transition-all cursor-pointer"
+                        style={{
+                          background: "#ffffff",
+                          border: `1.5px solid ${C.border}`,
+                          color: f.val ? C.textDark : "#9ca3af",
+                        }}
+                        value={f.val}
+                        onChange={(e) => {
+                          f.set(e.target.value);
+                          setFiltersApplied(true);
+                        }}
+                      >
+                        <option value="">{f.placeholder}</option>
+                        {f.opts.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={14}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-700"
+                      />
+                    </div>
+                  ));
+                })()}
               </div>
 
               {/* Botão de Limpar Filtros (Mobile) */}
               <div className="flex items-center gap-2.5 mt-4 pt-3 border-t border-slate-100">
                 <button
                   className="w-full py-3 rounded-xl font-extrabold text-xs text-slate-700 hover:bg-slate-100 transition-all border border-slate-200 shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                  onClick={() => {
-                    setSelectedCrop("");
-                    setSelectedPhase("");
-                    setSelectedDisease("");
-                    setSelectedCity("");
-                    setFiltersApplied(true);
-                  }}
+                  onClick={handleClearFilters}
                 >
                   <X size={14} /> LIMPAR FILTROS
                 </button>
