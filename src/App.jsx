@@ -1013,8 +1013,7 @@ const App = () => {
                 placeholder: "Todas as Frutas",
                 val: selectedCrop,
                 set: setSelectedCrop,
-                opts: ["Maçã", "Uva", "Banana", "Citrus", "Pêssego"],
-                locked: false,
+                opts: ["Maçã", "Uva", "Banana", "Pêssego"],
               },
               {
                 icon: TrendingUp,
@@ -1023,13 +1022,12 @@ const App = () => {
                 val: selectedPhase,
                 set: setSelectedPhase,
                 opts: [
-                  "Dormência",
-                  "Brotação",
+                  "Crescimento",
                   "Floração",
                   "Frutificação",
                   "Colheita",
+                  "Dormência",
                 ],
-                locked: false,
               },
               {
                 icon: Bug,
@@ -1042,10 +1040,8 @@ const App = () => {
                   "Mancha de Gala",
                   "Míldio da Videira",
                   "Sigatoka Negra",
-                  "Cancro Cítrico",
                   "Podridão Parda",
                 ],
-                locked: false,
               },
               {
                 icon: MapPin,
@@ -1054,21 +1050,20 @@ const App = () => {
                 val: selectedCity,
                 set: setSelectedCity,
                 opts: [
-                  "Lapa",
-                  "Fraiburgo",
-                  "Vacaria",
-                  "São Joaquim",
-                  "Londrina",
-                  "Curitiba",
-                  "Guarapuava",
-                  "Maringá",
-                  "Ponta Grossa",
-                  "Morretes",
+                  "Bandeirantes",
+                  "Bela Vista do Paraíso",
                   "Francisco Beltrão",
+                  "Guarapuava",
+                  "Irati",
+                  "Londrina",
+                  "Morretes",
                   "Palmas",
-                  "Pato Branco",
+                  "Planalto",
+                  "Ponta Grossa",
+                  "Santa Tereza do Oeste",
+                  "Telêmaco Borba",
+                  "Xambrê",
                 ],
-                locked: false,
               },
             ];
 
@@ -1093,7 +1088,7 @@ const App = () => {
                       Filtros
                     </h3>
                     <p className="text-xs mt-1" style={{ color: "#6b7280" }}>
-                      Personalize sua busca no mapa
+                      Filtragem em tempo real
                     </p>
                   </div>
                   <button
@@ -1132,7 +1127,10 @@ const App = () => {
                           color: f.val ? C.textDark : "#9ca3af",
                         }}
                         value={f.val}
-                        onChange={(e) => f.set(e.target.value)}
+                        onChange={(e) => {
+                          f.set(e.target.value);
+                          setFiltersApplied(true);
+                        }}
                       >
                         <option value="">{f.placeholder}</option>
                         {f.opts.map((opt) => (
@@ -1145,27 +1143,11 @@ const App = () => {
                   ))}
                 </div>
 
-                {/* BOTÃO DE APLICAR FILTROS NO DESKTOP */}
-                <div className="mt-6 flex flex-col gap-2">
-                  <button
-                    className="w-full py-3 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer text-white"
-                    style={{
-                      background: C.green,
-                    }}
-                    onClick={() => {
-                      setFiltersApplied(true);
-                      const currentFiltered = getFilteredMarkers();
-                      if (currentFiltered.length === 1) {
-                        handleMarkerClick(currentFiltered[0]);
-                      }
-                    }}
-                  >
-                    <Search size={16} /> APLICAR FILTROS
-                  </button>
-
-                  {(selectedCrop || selectedPhase || selectedDisease || selectedCity) && (
+                {/* BOTÃO DE LIMPAR FILTROS NO DESKTOP */}
+                {(selectedCrop || selectedPhase || selectedDisease || selectedCity) && (
+                  <div className="mt-6">
                     <button
-                      className="w-full py-2 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-200/70 transition-all border border-slate-300 cursor-pointer"
+                      className="w-full py-2.5 rounded-xl font-extrabold text-xs text-slate-700 hover:bg-slate-200/80 transition-all border border-slate-300 shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                       onClick={() => {
                         setSelectedCrop("");
                         setSelectedPhase("");
@@ -1174,10 +1156,10 @@ const App = () => {
                         setFiltersApplied(true);
                       }}
                     >
-                      LIMPAR FILTROS
+                      <X size={14} /> LIMPAR FILTROS
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
               </div>
             );
@@ -2096,8 +2078,7 @@ const App = () => {
                     placeholder: "Todas as Frutas",
                     val: selectedCrop,
                     set: setSelectedCrop,
-                    opts: ["Maçã", "Uva", "Banana", "Citrus", "Pêssego"],
-                    locked: false,
+                    opts: ["Maçã", "Uva", "Banana", "Pêssego"],
                   },
                   {
                     icon: TrendingUp,
@@ -2105,13 +2086,12 @@ const App = () => {
                     val: selectedPhase,
                     set: setSelectedPhase,
                     opts: [
-                      "Dormência",
-                      "Brotação",
+                      "Crescimento",
                       "Floração",
                       "Frutificação",
                       "Colheita",
+                      "Dormência",
                     ],
-                    locked: false,
                   },
                   {
                     icon: Bug,
@@ -2123,10 +2103,8 @@ const App = () => {
                       "Mancha de Gala",
                       "Míldio da Videira",
                       "Sigatoka Negra",
-                      "Cancro Cítrico",
                       "Podridão Parda",
                     ],
-                    locked: false,
                   },
                   {
                     icon: MapPin,
@@ -2134,21 +2112,20 @@ const App = () => {
                     val: selectedCity,
                     set: setSelectedCity,
                     opts: [
-                      "Lapa",
-                      "Fraiburgo",
-                      "Vacaria",
-                      "São Joaquim",
-                      "Londrina",
-                      "Curitiba",
-                      "Guarapuava",
-                      "Maringá",
-                      "Ponta Grossa",
-                      "Morretes",
+                      "Bandeirantes",
+                      "Bela Vista do Paraíso",
                       "Francisco Beltrão",
+                      "Guarapuava",
+                      "Irati",
+                      "Londrina",
+                      "Morretes",
                       "Palmas",
-                      "Pato Branco",
+                      "Planalto",
+                      "Ponta Grossa",
+                      "Santa Tereza do Oeste",
+                      "Telêmaco Borba",
+                      "Xambrê",
                     ],
-                    locked: false,
                   },
                 ].map((f, i) => (
                   <div key={i} className="relative">
@@ -2165,7 +2142,10 @@ const App = () => {
                         color: f.val ? C.textDark : "#9ca3af",
                       }}
                       value={f.val}
-                      onChange={(e) => f.set(e.target.value)}
+                      onChange={(e) => {
+                        f.set(e.target.value);
+                        setFiltersApplied(true);
+                      }}
                     >
                       <option value="">{f.placeholder}</option>
                       {f.opts.map((opt) => (
@@ -2182,10 +2162,10 @@ const App = () => {
                 ))}
               </div>
 
-              {/* Botões de Ação */}
+              {/* Botão de Limpar Filtros (Mobile) */}
               <div className="flex items-center gap-2.5 mt-4 pt-3 border-t border-slate-100">
                 <button
-                  className="px-4 py-3 rounded-xl font-bold text-xs text-slate-500 hover:bg-slate-100 transition-all border border-slate-200 cursor-pointer"
+                  className="w-full py-3 rounded-xl font-extrabold text-xs text-slate-700 hover:bg-slate-100 transition-all border border-slate-200 shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                   onClick={() => {
                     setSelectedCrop("");
                     setSelectedPhase("");
@@ -2194,23 +2174,7 @@ const App = () => {
                     setFiltersApplied(true);
                   }}
                 >
-                  LIMPAR
-                </button>
-                <button
-                  className="flex-1 py-3 rounded-xl font-extrabold text-xs text-white shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
-                  style={{
-                    background: C.green,
-                  }}
-                  onClick={() => {
-                    setShowFilterSheet(false);
-                    setFiltersApplied(true);
-                    const currentFiltered = getFilteredMarkers();
-                    if (currentFiltered.length === 1) {
-                      handleMarkerClick(currentFiltered[0]);
-                    }
-                  }}
-                >
-                  <Search size={15} /> APLICAR FILTROS
+                  <X size={14} /> LIMPAR FILTROS
                 </button>
               </div>
             </div>
